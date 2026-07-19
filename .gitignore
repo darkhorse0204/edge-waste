@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.eggs/
+.Python
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Datasets and large binary assets (track via README/links, not git)
+# NOTE: anchored to repo root with a leading slash so they don't also match the
+# source package src/edgewaste/data/ (which MUST be tracked).
+/data/
+/datasets/
+*.zip
+*.tar.gz
+
+# Trained models / checkpoints
+*.pt
+*.pth
+*.onnx
+*.h5
+/checkpoints/
+/runs/
+wandb/
+mlruns/
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+firebase-credentials.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local editor / tooling config
+.claude/

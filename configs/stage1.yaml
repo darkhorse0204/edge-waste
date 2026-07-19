@@ -1,0 +1,37 @@
+# Stage 1 configuration — camera-only ConvNeXt + ViT hybrid classifier.
+# Override any subset of fields; unspecified fields fall back to the dataclass
+# defaults in src/edgewaste/config.py.
+
+data:
+  processed_dir: data/processed
+  # Absolute path to the custom on-disk dataset (14 class folders).
+  custom_dataset_dir: "C:\\Users\\91738\\Desktop\\sidequest\\Waste Classification Project\\Waste Classification Project\\Dataset\\Custom Dataset Multiclass\\custom_dataset_multiclass\\custom_dataset_multiclass"
+  downloads_dir: data/downloads
+  manifest: data/splits.csv
+  val_fraction: 0.15
+  test_fraction: 0.15
+  seed: 42
+
+model:
+  # Backbones sized to fit a 4GB GPU. Bump to convnext_small / vit_base_patch16_224
+  # once on stronger hardware (the blueprint's nominal ConvNeXt + ViT-B pairing).
+  convnext: convnext_tiny
+  vit: vit_small_patch16_224
+  image_size: 224
+  fusion_dim: 512
+  dropout: 0.2
+  pretrained: true
+
+train:
+  epochs: 15
+  batch_size: 32
+  lr: 0.0003
+  weight_decay: 0.05
+  warmup_epochs: 1
+  label_smoothing: 0.1
+  num_workers: 4
+  amp: true
+  use_class_weights: true
+  grad_clip: 1.0
+  output_dir: runs/stage1
+  early_stop_patience: 5
