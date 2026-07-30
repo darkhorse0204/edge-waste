@@ -14,5 +14,10 @@ pyyaml>=6.0
 tqdm>=4.66
 matplotlib>=3.8
 
+# Detection stage (item localization) — needs a release that includes
+# YOLO26 (Jan 2026 or later); pin/verify the exact version against
+# https://docs.ultralytics.com/models/yolo26 if `yolo26n.pt` isn't recognized.
+ultralytics>=8.4
+
 # Optional: only needed to auto-download public datasets for the class merge.
 kaggle>=1.6

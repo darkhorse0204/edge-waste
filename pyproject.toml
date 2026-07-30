@@ -26,6 +26,9 @@ dependencies = [
 [project.optional-dependencies]
 # Public-dataset download (Stage 1 data merge) and future stages.
 data = ["kaggle>=1.6"]
+# Detection stage (YOLO26 item localization). See requirements.txt for the
+# version-pinning caveat.
+detect = ["ultralytics>=8.4"]
 dev = ["pytest>=8.0", "ruff>=0.5"]
 
 [project.scripts]
@@ -35,6 +38,9 @@ edgewaste-split = "edgewaste.data.splits:main"
 edgewaste-train = "edgewaste.train:main"
 edgewaste-eval = "edgewaste.evaluate:main"
 edgewaste-infer = "edgewaste.infer:main"
+edgewaste-detect-fetch = "edgewaste.detect.data:main"
+edgewaste-detect-train = "edgewaste.detect.train:main"
+edgewaste-pipeline = "edgewaste.pipeline:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -3,13 +3,17 @@
 > Goal: a working camera-only waste classifier. No sensors, no fusion, no FL yet.
 > This is the foundation everything else in Stages 2–3 builds on.
 
-> **Implementation status (2026-07-18):** the full Stage 1 pipeline is built and
-> validated end-to-end (ingest → split → train → evaluate → infer) on the custom
-> dataset. Taxonomy decision resolved to the **merged 18-class** set (see PLAN.md
-> "Decisions Made"). Remaining before exit: download the public datasets to fill
-> Organic/E-Waste/General-Waste/Shoes (needs a Kaggle token), run a full training
-> job (not just the smoke test), and record real metrics. Code lives under
-> `src/edgewaste/`; see the repo README for commands.
+> **Implementation status (2026-07-20):** the full Stage 1 pipeline is built
+> (ingest → split → train → evaluate → infer), plus a new detect-then-classify
+> path (`edgewaste.detect` + `edgewaste.pipeline`). Taxonomy decision now
+> resolved to the **7-class recycling-only** set, superseding the 2026-07-18
+> merged-18-class decision below (see PLAN.md "Decisions Made") — the custom
+> dataset audit that follows is kept for history but no longer reflects what
+> the pipeline trains on. Remaining before exit: download the three public
+> Kaggle sources (needs a Kaggle token), run a full training job on the new
+> taxonomy (not just the smoke test), fine-tune the YOLO26 detector on TACO,
+> and record real metrics for both. Code lives under `src/edgewaste/`; see the
+> repo README for commands.
 
 ## Scope (per blueprint)
 
@@ -22,21 +26,27 @@ Maps to blueprint **Module 1**, **Module 2**, and **Module 3**, plus the general
 
 ### 1. Dataset Collection (Module 1)
 - [~] Source and download public datasets — download tooling built
-      (`edgewaste-fetch`, Kaggle API) targeting Garbage-Classification-12 and an
-      E-Waste set; **not yet run** (needs a Kaggle token). TACO/TrashNet not wired
-      (the 12-class + e-waste sets cover the missing blueprint classes better).
-- [x] Custom dataset already exists on disk — inspected 2026-07-16, see
-      **"Custom dataset audit"** below for what's actually in it and the
-      taxonomy conflict it raises.
-- [x] Consolidate into the target classes — done via `edgewaste-ingest`, driven
-      by per-source raw→canonical mappings in `src/edgewaste/taxonomy.py`. Custom
-      dataset consolidated: 8,700 images across 14 of the 18 canonical classes;
-      the 4 public-only classes stay empty until `edgewaste-fetch` is run.
-- [x] Target taxonomy decided: **merged 18-class** set (see PLAN.md). Class
+      (`edgewaste-fetch`, Kaggle API) targeting TrashNet, TrashBox, and
+      Garbage-Classification-12 (verified Kaggle mirrors, see
+      `taxonomy.py`); **not yet run** (needs a Kaggle token).
+- [x] Consolidate into the target classes — `edgewaste-ingest`, driven by
+      per-source raw→canonical mappings in `src/edgewaste/taxonomy.py`, walks
+      the whole downloaded tree matching on leaf folder name (robust to
+      whatever nesting each dataset zip unpacks to).
+- [x] Target taxonomy decided (2026-07-20): **7-class recycling-only** set —
+      cardboard, paper, plastic, glass, metal, organic, other (see PLAN.md
+      "Decisions Made"). Supersedes the merged-18-class decision below. Class
       imbalance handled at train time via inverse-frequency class weights +
       a weighted sampler (`WasteDataset.class_weights` / `sampler_weights`).
+- [x] Detection dataset (TACO, single-class) wired separately via
+      `edgewaste.detect.data` — see Module 3 below and `docs/` root README.
 
-#### Custom dataset audit
+#### Custom dataset audit — historical, no longer current (kept for record)
+
+> The custom dataset described below was the basis for the superseded
+> 2026-07-18 18-class taxonomy decision. It is **not used** by the current
+> 7-class pipeline; this section is kept only so the reasoning behind
+> abandoning it stays on record.
 
 Location: `C:\Users\91738\Desktop\sidequest\Waste Classification Project\Waste Classification Project\Dataset\Custom Dataset Multiclass\custom_dataset_multiclass\custom_dataset_multiclass`
 (a `.zip` of the same folder sits one level up; no other public datasets are
@@ -108,42 +118,53 @@ Two things worth flagging rather than assuming past:
 - [x] Stratified train/val/test split via `edgewaste-split` (val + test, per the
       validation stage in the AI Pipeline below). Rare classes kept in every split.
 
-### 3. Vision Model (Module 3)
+### 3. Vision Model (Module 3) + detection stage (added 2026-07-20)
 - [x] Implement ConvNeXt backbone (timm, pretrained, pooled feature vector).
 - [x] Implement Vision Transformer backbone (timm, pretrained).
 - [x] Add an attention layer combining both into a single feature vector
       (`models/hybrid.py::AttentionFusion` — learned softmax weights over the two
       projected backbone features, then concat → classifier head).
 - [x] Architecture confirmed as the hybrid ConvNeXt + ViT + attention design.
+- [x] **New:** detect-then-classify pipeline per the tech-stack doc §2.3 —
+      YOLO26 (single-class `waste_item` localizer, `edgewaste.detect`) finds
+      and crops items before the classifier runs on each crop
+      (`edgewaste.pipeline`). Not yet trained/run — code only.
 
 ### 4. Basic Classification Output
 - [x] Classifier head over the fused feature vector (`HybridConvNeXtViT.head`).
-- [x] Output space = **18 merged classes** (taxonomy decision, see PLAN.md),
-      superseding the blueprint's ambiguous "10 named / 12 classes" list. Head
-      size is driven by `taxonomy.NUM_CLASSES`, so it tracks the taxonomy.
+- [x] Output space = **7 classes** (taxonomy decision, see PLAN.md), narrowed
+      from the earlier 18-class merge. Head size is driven by
+      `taxonomy.NUM_CLASSES`, so it tracks the taxonomy automatically.
 
 ### 5. AI Pipeline (section 7, Stage-1-relevant portion)
 - [x] Dataset → Training → Validation → Testing implemented
       (`train.py` + `evaluate.py`); checkpoint export = `runs/stage1/best.pt`
       with the class list embedded.
-- [~] Deploy to edge device — inference entry point built (`infer.py`, files +
-      webcam modes); on-device run pending hardware choice. Full edge loop
+- [x] Detector training implemented (`edgewaste.detect.train`, ultralytics),
+      checkpoint export = `runs/detect/taco_single_class/weights/best.pt`.
+- [~] Deploy to edge device — inference entry points built (`infer.py`
+      classifier-only; `pipeline.py` detect+classify; both support files +
+      webcam); on-device run pending hardware choice. Full edge loop
       (sensors, fusion, decision, motor) is Stage 2.
 
 ## Hardware needed for this stage
 - Camera: Raspberry Pi Camera or USB Camera.
-- Processing: Jetson Nano or Raspberry Pi 5 (decision needed — see PLAN.md open questions).
+- Processing: laptop/Colab GPU is enough for training both models; defer a
+  Jetson/Pi 5 purchase until CPU-only throughput is confirmed insufficient
+  (per `Project-Action-Plan.md`).
 
 ## Software needed for this stage
-- Python, PyTorch, OpenCV, NumPy, Scikit-learn.
-- Ultralytics (if a YOLO-based path is explored for detection, though core
-  Stage 1 model per blueprint is ConvNeXt/ViT, not YOLO).
+- Python, PyTorch, timm, OpenCV, NumPy, Scikit-learn (classifier).
+- Ultralytics (`pip install -e ".[detect]"`) for the YOLO26 detector — now
+  actually used, not just a maybe.
 
 ## Exit criteria for Stage 1
 
 Before moving to Stage 2, there should be:
-- A trained model that classifies waste images into the target classes with
-  a documented accuracy/precision/recall (metrics list is in blueprint section 14).
+- A trained detector that localizes items with a documented mAP on a held-out
+  TACO split, and a trained classifier that types crops into the 7 target
+  classes with documented accuracy/precision/recall (metrics list is in
+  blueprint section 14).
 - A model export usable for on-device inference (format TBD based on hardware choice).
 - A basic inference demo running on the chosen edge device using the camera only.
 

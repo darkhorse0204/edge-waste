@@ -1,0 +1,16 @@
+# Detection-stage configuration — YOLO26 single-class item localizer.
+# Override any subset of fields; unspecified fields fall back to the
+# DetectConfig defaults in src/edgewaste/config.py.
+
+detect:
+  raw_dir: data/detect/taco_raw
+  prepared_dir: data/detect/taco
+  kaggle_locator: vencerlanz09/taco-dataset-yolo-format
+  data_yaml: data/detect/taco/data.yaml
+  class_name: waste_item
+  model: yolo26n.pt
+  image_size: 640
+  epochs: 60
+  batch_size: 16
+  output_dir: runs/detect
+  conf_threshold: 0.35

@@ -25,7 +25,7 @@ from tqdm import tqdm
 from .config import Config
 from .data.dataset import WasteDataset
 from .models import build_model
-from .taxonomy import CLASS_NAMES, NUM_CLASSES, HAZARDOUS_GAP
+from .taxonomy import CLASS_NAMES, NUM_CLASSES
 from .utils import pick_device, seed_everything, accuracy, count_parameters
 
 
@@ -87,8 +87,6 @@ def train(cfg: Config, smoke: bool = False) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Device: {device}")
-    if HAZARDOUS_GAP:
-        print(f"Note: {HAZARDOUS_GAP}")
 
     train_loader, val_loader, base_train = _make_loaders(cfg, smoke)
     present = sorted(base_train.label_counts().keys())

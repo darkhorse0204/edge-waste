@@ -12,13 +12,27 @@ Maps to blueprint **Module 4**, **Module 5**, **Module 6**, **Module 7**,
 **Module 8**, **Module 9**, plus **Edge Deployment** (section 8) and
 **Conveyor Belt Logic** (section 11).
 
+> **Scope update (2026-07-20, see PLAN.md "Decisions Made"):** the core Stage 2
+> MVP is **moisture + MQ-135 only**, per `Project-Action-Plan.md`'s explicit
+> phasing — metal sensor and load cell move to the enhanced-prototype tail of
+> Stage 2 (or later), not the initial build. The OCI formula in Module 4 below
+> is also stale: `OCI-Formula-Design-and-Calibration-Protocol.md` (repo root)
+> is now the authoritative spec — 2 sensors (moisture + gas), no vision term,
+> logistic-regression-fit sigmoid, not the `0.4/0.4/0.2` draft below. The rest
+> of this doc (sensor fusion, cross-model fusion, confidence, decision engine,
+> conveyor logic) is unaffected by that change and still applies.
+
 ## What needs to be done
 
 ### 1. Sensor Module (Module 4)
-- [ ] Integrate moisture sensor (capacitive).
-- [ ] Integrate gas sensor (MQ135).
-- [ ] Integrate metal sensor (inductive).
-- [ ] Integrate weight sensor (HX711 + load cell).
+- [ ] Integrate moisture sensor (capacitive) — core MVP, do first.
+- [ ] Integrate gas sensor (MQ135) — core MVP, do first. Run the mandatory
+      24–48h burn-in and compute per-unit R0 before any calibration data
+      collection (see the OCI calibration protocol doc, Part 1.2 and 4.2).
+- [ ] Integrate DHT22 (temperature/humidity) alongside both — confound logging
+      per the calibration protocol, not itself an OCI input.
+- [ ] *Deferred to enhanced prototype:* metal sensor (inductive), weight
+      sensor (HX711 + load cell) — see `Project-Action-Plan.md` §6 for why.
 - [ ] Each sensor needs a read pipeline producing the units shown in the
       blueprint's example: moisture (%), gas (ppm), metal (boolean), weight (g).
 
@@ -36,11 +50,21 @@ Maps to blueprint **Module 4**, **Module 5**, **Module 6**, **Module 7**,
       open decision (see PLAN.md), not something to pick unilaterally.
 
 ### 4. Organic Contamination Index — OCI (Module 7)
-- [ ] Implement formula: `OCI = 0.4×Moisture + 0.4×Gas + 0.2×VisionScore`,
-      normalized to 0–100. Marked "possible formula" in source — expect tuning.
-- [ ] Implement banding: 0–20 Clean, 20–50 Moderate, 50–100 Highly Contaminated.
+- [ ] Implement the calibrated formula from
+      `OCI-Formula-Design-and-Calibration-Protocol.md` (repo root), **not**
+      the `0.4×Moisture + 0.4×Gas + 0.2×VisionScore` draft this checklist item
+      originally named:
+      `OCI = σ(β0 + β1·f_m(moisture) + β2·f_g(gas) [+ β3·interaction])`,
+      with `f_m`/`f_g` fixed-reference-normalized (not raw min-max) and `g(G)
+      = -log(Rs/R0)` for the gas channel (not a ppm datasheet curve-fit).
+- [ ] Fit `β0..β3` via logistic regression on staged calibration data (protocol
+      doc Part 3–4: ~160 samples, 2 categories × 5 severities × 8 replicates),
+      then hard-code the coefficients — no live regression at runtime.
+- [ ] Select the operating threshold via sensitivity-constrained ROC (protocol
+      doc Part 6), not a fixed 0–20/20–50/50–100 banding guessed up front.
 - [ ] This is called out as not present in existing literature — worth
-      documenting carefully for the eventual paper/report.
+      documenting carefully for the eventual paper/report (protocol doc Part 7
+      has a ready-made novelty framing).
 
 ### 5. Confidence Estimation (Module 8)
 - [ ] Choose one of: Bayesian Neural Network, Monte Carlo Dropout, Temperature
@@ -70,8 +94,10 @@ Maps to blueprint **Module 4**, **Module 5**, **Module 6**, **Module 7**,
       logic all within the belt-stop window.
 
 ## Hardware needed for this stage (in addition to Stage 1)
-- MQ135 (gas), capacitive moisture sensor, inductive metal sensor, HX711 + load cell.
-- Servo or stepper motor + conveyor belt.
+- Core MVP: MQ135 (gas), capacitive moisture sensor, DHT22, ESP32/Arduino
+  (+ ADS1115 if reading analog sensors from a Raspberry Pi).
+- Deferred to enhanced prototype: inductive metal sensor, HX711 + load cell,
+  servo/stepper motor + conveyor belt.
 
 ## Software needed for this stage (in addition to Stage 1)
 - FastAPI (if sensor/decision services are split into separate processes/services).

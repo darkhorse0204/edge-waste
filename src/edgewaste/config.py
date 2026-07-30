@@ -13,12 +13,6 @@ import yaml
 class DataConfig:
     # Root where consolidated, canonical-class images are written.
     processed_dir: str = "data/processed"
-    # Path to the custom on-disk dataset (the one guaranteed present).
-    custom_dataset_dir: str = (
-        r"C:\Users\91738\Desktop\sidequest\Waste Classification Project"
-        r"\Waste Classification Project\Dataset\Custom Dataset Multiclass"
-        r"\custom_dataset_multiclass\custom_dataset_multiclass"
-    )
     # Where kaggle downloads are unpacked before ingest.
     downloads_dir: str = "data/downloads"
     # Split manifest (CSV) written by edgewaste.data.splits.
@@ -56,10 +50,31 @@ class TrainConfig:
 
 
 @dataclass
+class DetectConfig:
+    # Where the TACO (YOLO-format) detection dataset is unpacked + prepared.
+    raw_dir: str = "data/detect/taco_raw"
+    prepared_dir: str = "data/detect/taco"
+    # Kaggle slug for the pre-converted-to-YOLO-format TACO mirror.
+    kaggle_locator: str = "vencerlanz09/taco-dataset-yolo-format"
+    # data.yaml written for ultralytics; single class since the detector's job
+    # is localization only ("is there an item, where") — material typing is
+    # the Stage-1 classifier's job on the resulting crop.
+    data_yaml: str = "data/detect/taco/data.yaml"
+    class_name: str = "waste_item"
+    model: str = "yolo26n.pt"
+    image_size: int = 640
+    epochs: int = 60
+    batch_size: int = 16
+    output_dir: str = "runs/detect"
+    conf_threshold: float = 0.35  # inference-time detection confidence gate
+
+
+@dataclass
 class Config:
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
+    detect: DetectConfig = field(default_factory=DetectConfig)
 
     @staticmethod
     def load(path: str | Path | None) -> "Config":
@@ -73,6 +88,8 @@ class Config:
             cfg.model = ModelConfig(**{**asdict(cfg.model), **raw["model"]})
         if "train" in raw:
             cfg.train = TrainConfig(**{**asdict(cfg.train), **raw["train"]})
+        if "detect" in raw:
+            cfg.detect = DetectConfig(**{**asdict(cfg.detect), **raw["detect"]})
         return cfg
 
     def to_dict(self) -> dict[str, Any]:

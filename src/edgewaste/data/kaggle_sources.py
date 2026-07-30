@@ -1,11 +1,10 @@
-"""Download the public datasets used to fill blueprint-only classes.
+"""Download the public datasets that make up the 7-class vision corpus.
 
-These fill the classes the custom dataset lacks (Organic via 'biological',
-E-Waste, General Waste via 'trash', plus Shoes). Requires the `kaggle` package
-and API credentials in ``~/.kaggle/kaggle.json`` (or the KAGGLE_USERNAME /
-KAGGLE_KEY env vars). If neither is available the command explains how to set
-them up and exits without error, so the rest of the pipeline still runs on the
-custom dataset alone.
+All three declared sources (TrashNet, TrashBox, Garbage-Classification-12) are
+Kaggle-hosted. Requires the `kaggle` package and API credentials in
+``~/.kaggle/kaggle.json`` (or the KAGGLE_USERNAME / KAGGLE_KEY env vars). If
+neither is available the command explains how to set them up and exits
+without error rather than failing the whole pipeline.
 """
 
 from __future__ import annotations
@@ -24,7 +23,8 @@ Kaggle credentials not found. To enable public-dataset download:
         {home}/.kaggle/kaggle.json
      (or set KAGGLE_USERNAME and KAGGLE_KEY environment variables)
 Then re-run: edgewaste-fetch
-Until then, Stage 1 runs on the custom dataset only (14 of 18 classes).
+Until then, there is no data to train on — all three Stage 1 vision sources
+are Kaggle-hosted (see edgewaste.taxonomy.SOURCES).
 """
 
 

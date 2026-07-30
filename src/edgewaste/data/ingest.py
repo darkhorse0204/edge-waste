@@ -1,14 +1,18 @@
 """Consolidate raw data sources into a single canonical-class layout.
 
-Reads each available source (custom on-disk dataset, plus any downloaded public
-datasets), maps its raw folders to canonical classes via
-``edgewaste.taxonomy``, and writes a flat ``processed_dir/<canonical_class>/``
-tree. Files are hard-linked when possible (fast, no extra disk) and copied
-otherwise. A ``provenance.csv`` records where every consolidated image came
-from, so the merged dataset stays auditable for the report.
+Reads each downloaded public dataset (see kaggle_sources.py), maps its raw
+class folders to canonical classes via ``edgewaste.taxonomy``, and writes a
+flat ``processed_dir/<canonical_class>/`` tree. Files are hard-linked when
+possible (fast, no extra disk) and copied otherwise. A ``provenance.csv``
+records where every consolidated image came from, so the merged dataset stays
+auditable for the report.
 
-The custom source is always ingested. Public sources are ingested only if their
-downloaded folder exists under ``downloads_dir`` (see kaggle_sources.py).
+Class-folder matching walks the *entire* downloaded tree rather than assuming
+one fixed nesting depth, because public dataset zips are inconsistent about
+this (e.g. the TrashNet Kaggle mirror commonly unpacks to
+``Garbage classification/Garbage classification/<class>/``, while others are
+flat). A source is only ingested if its ``downloads_dir/<key>/`` folder exists
+(populated by ``edgewaste-fetch``).
 """
 
 from __future__ import annotations
@@ -32,25 +36,25 @@ def _iter_images(folder: Path):
             yield p
 
 
-def _resolve_raw_class(source: DataSource, raw_name: str) -> str | None:
-    """Map a raw folder name to a canonical class, tolerating case/space drift.
+def _normalize(name: str) -> str:
+    return name.lower().replace("_", " ").replace("-", " ").strip()
 
-    Returns the canonical class name, or None if the source explicitly drops it.
-    Raises KeyError if the folder isn't declared in the source mapping at all,
-    so an unexpected new folder fails loudly instead of being mis-binned.
+
+def _try_resolve_raw_class(source: DataSource, raw_name: str) -> tuple[bool, str | None]:
+    """Tolerant lookup of a folder name against a source's mapping.
+
+    Returns (matched, canonical) — matched=False means this folder name isn't
+    declared in the mapping at all (not a class folder, e.g. a nesting-only
+    wrapper directory); canonical=None with matched=True means the source
+    explicitly drops that raw class.
     """
     if raw_name in source.mapping:
-        return source.mapping[raw_name]
-    # tolerant match: normalize case and separators
-    norm = raw_name.lower().replace("_", " ").replace("-", " ").strip()
+        return True, source.mapping[raw_name]
+    norm = _normalize(raw_name)
     for key, val in source.mapping.items():
-        if key.lower().replace("_", " ").replace("-", " ").strip() == norm:
-            return val
-    raise KeyError(
-        f"Source '{source.key}' has folder '{raw_name}' not in its taxonomy "
-        f"mapping. Add it to edgewaste.taxonomy.SOURCES['{source.key}'].mapping "
-        f"(map to a canonical class or None to drop)."
-    )
+        if _normalize(key) == norm:
+            return True, val
+    return False, None
 
 
 def _link_or_copy(src: Path, dst: Path) -> None:
@@ -72,17 +76,28 @@ def _dedupe_name(source_key: str, raw_class: str, path: Path) -> str:
 def ingest_source(
     source: DataSource, root: Path, processed_dir: Path, writer: csv.writer
 ) -> dict[str, int]:
-    """Ingest one source rooted at `root`. Returns per-canonical-class counts."""
+    """Ingest one source rooted at `root`. Returns per-canonical-class counts.
+
+    Walks the entire tree under `root` and treats any directory whose *name*
+    matches a declared raw class in the source's mapping as a class folder
+    (images taken from directly inside it, and any deeper subfolders it may
+    have, e.g. a train/test split within the class) — regardless of how many
+    wrapper levels of nesting the dataset's zip happens to unpack to.
+    """
     counts: dict[str, int] = {}
     if not root.exists():
         print(f"  [skip] {source.key}: {root} not found")
         return counts
-    subdirs = [d for d in sorted(root.iterdir()) if d.is_dir()]
-    if not subdirs:
-        print(f"  [skip] {source.key}: no class subfolders under {root}")
+    all_dirs = [d for d in root.rglob("*") if d.is_dir()]
+    if not all_dirs:
+        print(f"  [skip] {source.key}: no subfolders under {root}")
         return counts
-    for class_dir in subdirs:
-        canonical = _resolve_raw_class(source, class_dir.name)
+    matched_any = False
+    for class_dir in sorted(all_dirs):
+        matched, canonical = _try_resolve_raw_class(source, class_dir.name)
+        if not matched:
+            continue  # not a declared class folder — likely a wrapper dir
+        matched_any = True
         if canonical is None:
             continue  # deliberately dropped raw class
         for img in _iter_images(class_dir):
@@ -92,6 +107,14 @@ def ingest_source(
             writer.writerow([canonical, source.key, class_dir.name,
                              str(img), out_name])
             counts[canonical] = counts.get(canonical, 0) + 1
+    if not matched_any:
+        raise KeyError(
+            f"Source '{source.key}' has no folder anywhere under {root} "
+            f"matching a declared class in its taxonomy mapping "
+            f"({sorted(source.mapping)}). The dataset's folder names may "
+            f"have changed — inspect {root} and update "
+            f"edgewaste.taxonomy.SOURCES['{source.key}'].mapping."
+        )
     return counts
 
 
@@ -108,11 +131,8 @@ def ingest(cfg: Config) -> dict[str, int]:
         writer.writerow(["canonical_class", "source", "raw_class",
                          "source_path", "dest_name"])
         for key, source in SOURCES.items():
-            if source.kind == "local":
-                root = Path(cfg.data.custom_dataset_dir)
-            else:
-                # public sources unpack to downloads_dir/<key>/
-                root = downloads_dir / key
+            # public sources unpack to downloads_dir/<key>/
+            root = downloads_dir / key
             print(f"- ingesting '{key}' from {root}")
             counts = ingest_source(source, root, processed_dir, writer)
             for cls, n in counts.items():

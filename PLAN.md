@@ -68,15 +68,41 @@ in three stages so there's always a working system:
 
 ## Decisions Made
 
-- **Taxonomy (resolved 2026-07-18): merge both.** The custom dataset's 14
-  classes and the blueprint's 12-class list are combined into one **18-class**
-  canonical taxonomy — every custom class is kept, and the blueprint classes the
-  custom set lacked (Organic, E-Waste, General Waste, plus Shoes) are sourced
-  from public datasets. The single source of truth is
-  [`src/edgewaste/taxonomy.py`](src/edgewaste/taxonomy.py), which also holds each
-  source's raw→canonical folder mapping. One residual gap: **`hazardous` has no
-  clean public source yet** and stays empty (trainer warns, weights it out) until
-  one is added or it's folded into `battery`/`e_waste`.
+- **Taxonomy (resolved 2026-07-20, supersedes the 2026-07-18 "merge both"
+  decision below): narrow to 7 classes, public data only.** Following the
+  external planning docs (`Waste-Classification-Tech-Stack-Recommendation.md`,
+  `Project-Action-Plan.md`), the target taxonomy is `cardboard, paper, plastic,
+  glass, metal, organic, other` — sourced from TrashNet, TrashBox, and
+  Garbage-Classification-12 (all Kaggle). The custom 18-class medical/PPE
+  dataset is **out of scope** and no longer referenced. The single source of
+  truth is [`src/edgewaste/taxonomy.py`](src/edgewaste/taxonomy.py).
+  <details><summary>Superseded 2026-07-18 decision (kept for history)</summary>
+  The custom dataset's 14 classes and the blueprint's 12-class list were
+  combined into an 18-class taxonomy, with `hazardous` left as a known gap.
+  Abandoned because it conflicted with the external planning docs' scope, and
+  because the custom dataset turned out to be a Roboflow-aggregated set, not
+  captured original images (see the "Custom dataset audit" this superseded in
+  `docs/stage-1-core-mvp.md`).
+  </details>
+- **Detect-then-classify pipeline (resolved 2026-07-20), resolving the
+  ConvNeXt+ViT-fusion-vs-YOLO+ConvNeXt open question below: both, staged.**
+  YOLO26 (single-class, trained on TACO) localizes/crops items on a conveyor;
+  the existing ConvNeXt+ViT hybrid classifies each crop. See
+  [`src/edgewaste/detect/`](src/edgewaste/detect/) and
+  [`src/edgewaste/pipeline.py`](src/edgewaste/pipeline.py).
+- **OCI formula: `OCI-Formula-Design-and-Calibration-Protocol.md` (repo root)
+  is now authoritative**, superseding the `0.4×Moisture + 0.4×Gas +
+  0.2×VisionScore` draft formula still referenced in
+  `docs/stage-2-enhanced-system.md`. The calibrated design is a 2-sensor
+  (moisture + gas only, no vision term) logistic-regression-derived sigmoid,
+  fit once offline and hard-coded for edge inference — not yet implemented,
+  this only updates which spec Stage 2 should build against.
+- **Core Stage-2 sensor MVP: moisture + MQ-135 only**, per
+  `Project-Action-Plan.md`'s explicit deferral of the metal sensor and load
+  cell to the enhanced-prototype phase. This conflicts with
+  `docs/stage-2-enhanced-system.md`'s Module 4 checklist, which lists all four
+  sensors as needed "for this stage" — that checklist is stale until Stage 2
+  work actually starts; treat the leaner two-sensor MVP as current guidance.
 
 ## Open Questions / Things Not Yet Decided
 
@@ -84,14 +110,12 @@ These are called out rather than assumed, per the blueprint being a discussion
 document rather than a finalized spec:
 
 - Final hardware choice: Jetson Nano vs Raspberry Pi 5 (affects inference
-  framework — TensorRT vs generic ONNX/TFLite runtime).
-- Cross-model fusion approach: ConvNeXt+ViT fusion vs YOLO+ConvNeXt — the doc
-  lists both as "possible," no decision made yet.
+  framework — TensorRT vs generic ONNX/TFLite runtime). Both external docs
+  recommend deferring the Jetson purchase until Pi 5/laptop throughput is
+  confirmed insufficient.
 - Whether Federated Learning is simulated (single machine, multiple virtual
   clients) or deployed across genuinely separate physical bins — changes
   Stage 3 scope significantly.
-- Exact OCI weighting (`0.4×Moisture + 0.4×Gas + 0.2×VisionScore`) is marked
-  "possible formula" in the source — will need empirical tuning, not a fixed spec.
 
 ## Timeline (from blueprint, academic phases — distinct from the 3 build stages above)
 

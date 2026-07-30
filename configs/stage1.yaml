@@ -4,8 +4,6 @@
 
 data:
   processed_dir: data/processed
-  # Absolute path to the custom on-disk dataset (14 class folders).
-  custom_dataset_dir: "C:\\Users\\91738\\Desktop\\sidequest\\Waste Classification Project\\Waste Classification Project\\Dataset\\Custom Dataset Multiclass\\custom_dataset_multiclass\\custom_dataset_multiclass"
   downloads_dir: data/downloads
   manifest: data/splits.csv
   val_fraction: 0.15

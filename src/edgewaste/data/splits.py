@@ -2,8 +2,9 @@
 
 Scans ``processed_dir/<canonical_class>/*`` and writes a single CSV
 (``data/splits.csv``) with columns: ``path,label,class_name,split``. Splitting
-is stratified per class so rare classes (textile, I.V, syringe) keep
-representation in every split, and deterministic given the configured seed.
+is stratified per class so rarer classes (e.g. 'other', which pools several
+minor source categories) keep representation in every split, deterministic
+given the configured seed.
 """
 
 from __future__ import annotations

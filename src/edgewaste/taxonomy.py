@@ -1,16 +1,16 @@
 """Canonical waste taxonomy and per-source class mappings.
 
-Background (see PLAN.md "Open Questions" and docs/stage-1-core-mvp.md):
-the custom on-disk dataset uses a 14-class medical/PPE-skewed taxonomy, while
-the blueprint's Module 12 names a general-recycling taxonomy (Organic, Plastic,
-Paper, Glass, Metal, Cardboard, Textile, E-Waste, Hazardous, General Waste).
-The chosen resolution (2026-07-18) is to **merge both** into one combined
-taxonomy: keep every custom class and add the blueprint classes the custom set
-lacks, sourcing the additions from public datasets.
+Decision (superseding the 2026-07-18 "merge both" taxonomy recorded in
+PLAN.md's history): the project targets the **7-class recycling taxonomy**
+used by `Waste-Classification-Tech-Stack-Recommendation.md` /
+`Project-Action-Plan.md` — paper, cardboard, plastic, glass, metal, organic,
+other — sourced entirely from public datasets. The custom 18-class
+medical/PPE-skewed dataset (battery, mask, glove, syringe, iv_bag, cotton,
+...) is out of scope for this taxonomy; it isn't referenced below.
 
-This module is the single source of truth for that merged taxonomy. Every data
-source declares how its raw folder names map onto the canonical classes below,
-so consolidation is a lookup, never an ad-hoc rename scattered through scripts.
+This module is the single source of truth for the taxonomy. Every data source
+declares how its raw folder names map onto the canonical classes, so
+consolidation is a lookup, never an ad-hoc rename scattered through scripts.
 """
 
 from __future__ import annotations
@@ -24,51 +24,24 @@ class WasteClass:
 
     name: str  # canonical id, lowercase snake_case
     display: str  # human-readable label
-    group: str  # coarse grouping, useful for reports / decision engine later
-    blueprint: bool = False  # named in the blueprint's Module 12 list
     note: str = ""
 
 
 # ---------------------------------------------------------------------------
-# Canonical merged taxonomy (18 classes).
-#
-# Groups:
-#   recyclable  - dry recyclables that also appear in the blueprint's list
-#   organic     - biodegradable / food / green waste  (blueprint: "Organic")
-#   medical     - PPE / clinical items unique to the custom dataset
-#   special     - battery / e-waste / hazardous / general — blueprint additions
+# Canonical 7-class taxonomy (docs' "paper, cardboard, plastic, glass, metal,
+# organic, other/reject" list).
 # ---------------------------------------------------------------------------
 CLASSES: tuple[WasteClass, ...] = (
-    # --- recyclables (custom + blueprint overlap) ---
-    WasteClass("cardboard", "Cardboard", "recyclable", blueprint=True),
-    WasteClass("paper", "Paper", "recyclable", blueprint=True),
-    WasteClass("plastic", "Plastic", "recyclable", blueprint=True),
-    WasteClass("glass", "Glass", "recyclable", blueprint=True),
-    WasteClass("metal", "Metal", "recyclable", blueprint=True),
-    WasteClass("textile", "Textile", "recyclable", blueprint=True),
-    WasteClass("styrofoam", "Styrofoam", "recyclable",
-               note="expanded polystyrene; blueprint folds this under plastic/general"),
-    # --- organic (custom 'biodegradable' == blueprint 'Organic') ---
-    WasteClass("organic", "Organic", "organic", blueprint=True,
-               note="custom dataset's 'biodegradable' folder maps here"),
-    # --- medical / PPE (custom only; no blueprint equivalent) ---
-    WasteClass("mask", "Face Mask", "medical"),
-    WasteClass("glove", "Glove", "medical"),
-    WasteClass("syringe", "Syringe", "medical"),
-    WasteClass("iv_bag", "IV Bag/Line", "medical",
-               note="custom dataset's 'I.V' folder"),
-    WasteClass("cotton", "Cotton/Gauze", "medical"),
-    # --- special: blueprint additions + battery ---
-    WasteClass("battery", "Battery", "special",
-               note="present in custom dataset; also a hazardous/e-waste item"),
-    WasteClass("e_waste", "E-Waste", "special", blueprint=True,
-               note="sourced from public e-waste dataset"),
-    WasteClass("hazardous", "Hazardous", "special", blueprint=True,
-               note="NO clean public source identified yet - see DATA gap note"),
-    WasteClass("general_waste", "General Waste", "special", blueprint=True,
-               note="non-recyclable residual; public 'trash' class maps here"),
-    WasteClass("shoes", "Shoes/Footwear", "recyclable",
-               note="present in public garbage-classification set; kept distinct from textile"),
+    WasteClass("cardboard", "Cardboard"),
+    WasteClass("paper", "Paper"),
+    WasteClass("plastic", "Plastic"),
+    WasteClass("glass", "Glass"),
+    WasteClass("metal", "Metal"),
+    WasteClass("organic", "Organic"),
+    WasteClass("other", "Other / Non-recyclable",
+               note="catch-all: general trash, e-waste, textiles, medical, "
+                    "battery, and anything else outside the six core "
+                    "material classes"),
 )
 
 # Ordered canonical class names — this order defines the classifier head indices.
@@ -92,52 +65,66 @@ def class_index(name: str) -> int:
 # A mapping value of None means "drop this raw class" (not part of our target).
 # Any raw folder not present in a source's `mapping` is treated as an error at
 # ingest time, so new/renamed source folders can't be silently mis-binned.
+#
+# All three sources below are classification (folder-per-class) datasets —
+# compatible with `edgewaste.data.ingest`'s ImageFolder-style consolidation.
+# TACO and ZeroWaste-f (the docs' detection/localization datasets) are NOT
+# folder-per-class and are handled separately by `edgewaste.detect`, not here.
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class DataSource:
     key: str  # short id used on the CLI and in provenance records
     title: str  # human description
-    kind: str  # "local" | "kaggle" | "github"
-    # For kaggle sources: the "owner/dataset-slug"; for github: repo URL.
-    locator: str = ""
+    kind: str  # "kaggle" (only kind currently supported by the fetch/ingest pipeline)
+    locator: str = ""  # kaggle "owner/dataset-slug"
     # raw class folder (as it appears in the source) -> canonical class or None
     mapping: dict[str, str | None] = field(default_factory=dict)
     note: str = ""
 
 
-# The custom dataset already on disk (14 folders). This is the only source that
-# is guaranteed present; the rest require download + credentials.
-CUSTOM_DATASET = DataSource(
-    key="custom",
-    title="Custom Multiclass Waste Dataset (Roboflow-exported, on disk)",
-    kind="local",
-    locator="",  # path supplied at runtime (see config.custom_dataset_dir)
+TRASHNET = DataSource(
+    key="trashnet",
+    title="TrashNet (Kaggle mirror: asdasdasasdas/garbage-classification)",
+    kind="kaggle",
+    locator="asdasdasasdas/garbage-classification",
     mapping={
-        "battery": "battery",
-        "biodegradable": "organic",
         "cardboard": "cardboard",
-        "cotton": "cotton",
         "glass": "glass",
-        "glove": "glove",
-        "I.V": "iv_bag",
-        "mask": "mask",
         "metal": "metal",
         "paper": "paper",
         "plastic": "plastic",
-        "styrofoam": "styrofoam",
-        "syringe": "syringe",
-        "textile": "textile",
+        "trash": "other",
     },
-    note="8,686 images; class imbalance in textile/I.V/syringe.",
+    note="Classic 6-class TrashNet mirror, ~2,527 images, clean lab "
+         "background. Folder nesting varies by release (commonly "
+         "'Garbage classification/Garbage classification/<class>/') — ingest "
+         "walks the whole tree matching on leaf folder name, so nesting "
+         "depth doesn't matter.",
 )
 
-# Public datasets used to fill the blueprint classes the custom set lacks
-# (Organic, E-Waste, General Waste). Folder names below reflect each dataset's
-# published layout; verify after download and adjust if the maintainer changed
-# them. Hazardous has no clean single-source public dataset yet (see note).
+TRASHBOX = DataSource(
+    key="trashbox",
+    title="TrashBox (Kaggle mirror: minhle13/trashbox)",
+    kind="kaggle",
+    locator="minhle13/trashbox",
+    mapping={
+        "cardboard": "cardboard",
+        "glass": "glass",
+        "metal": "metal",
+        "paper": "paper",
+        "plastic": "plastic",
+        "e-waste": "other",
+        "medical": "other",
+    },
+    note="~14.3k in-the-wild/web-sourced images across 7 classes; fills "
+         "TrashNet's diversity gap per the tech-stack doc's combination "
+         "strategy. Verify folder names after download (e-waste/medical "
+         "spelling can vary by mirror release).",
+)
+
 GARBAGE_12 = DataSource(
     key="garbage12",
-    title="Garbage Classification 12 classes (mostafaabla)",
+    title="Garbage Classification 12 classes (Kaggle: mostafaabla/garbage-classification)",
     kind="kaggle",
     locator="mostafaabla/garbage-classification",
     mapping={
@@ -149,71 +136,49 @@ GARBAGE_12 = DataSource(
         "green-glass": "glass",
         "brown-glass": "glass",
         "white-glass": "glass",
-        "clothes": "textile",
-        "shoes": "shoes",
-        "battery": "battery",
-        "trash": "general_waste",
+        "clothes": "other",
+        "shoes": "other",
+        "battery": "other",
+        "trash": "other",
     },
-    note="Fills Organic (biological), General Waste (trash), Shoes.",
-)
-
-EWASTE = DataSource(
-    key="ewaste",
-    title="E-Waste Image Dataset (akshat103)",
-    kind="kaggle",
-    locator="akshat103/e-waste-image-dataset",
-    mapping={
-        # 10 electronic-item subfolders all collapse to e_waste.
-        "Battery": "battery",
-        "Keyboard": "e_waste",
-        "Microwave": "e_waste",
-        "Mobile": "e_waste",
-        "Mouse": "e_waste",
-        "PCB": "e_waste",
-        "Player": "e_waste",
-        "Printer": "e_waste",
-        "Television": "e_waste",
-        "Washing Machine": "e_waste",
-    },
-    note="Folder names vary by release; ingest tolerates case/space differences.",
+    note="Primary source for 'organic' (its 'biological' folder) — neither "
+         "TrashNet nor TrashBox has an organic/food-waste class.",
 )
 
 SOURCES: dict[str, DataSource] = {
-    s.key: s for s in (CUSTOM_DATASET, GARBAGE_12, EWASTE)
+    s.key: s for s in (TRASHNET, TRASHBOX, GARBAGE_12)
 }
 
 # ---------------------------------------------------------------------------
-# Known data gap (surfaced deliberately rather than hidden):
-#   'hazardous' has no clean, single, freely-downloadable public dataset that
-#   maps cleanly. Options for later: (a) treat battery+e_waste as the hazardous
-#   umbrella and drop the standalone 'hazardous' class, or (b) hand-curate a
-#   small hazardous set (paint cans, chemical bottles, aerosols). Until then the
-#   'hazardous' class will simply have zero samples and the trainer will warn.
+# Known gap, surfaced deliberately rather than hidden: the tech-stack doc also
+# names ZeroWaste-f and WaRP-C as useful additions (closest domain match to an
+# actual conveyor deployment). Neither has a confirmed Kaggle mirror as of
+# 2026-07 — ZeroWaste-f is distributed from http://ai.bu.edu/zerowaste/ under
+# manual download, not a simple `kaggle datasets download` call — so they are
+# NOT wired into SOURCES yet. Add them by hand (download_dir + a `local`-kind
+# path) if/when you fetch them manually; the ingest pipeline's per-source
+# mapping design supports that without other changes.
 # ---------------------------------------------------------------------------
-HAZARDOUS_GAP = (
-    "No public source mapped to 'hazardous' yet; class will be empty until a "
-    "source is added or the class is merged into battery/e_waste."
+ZEROWASTE_F_GAP = (
+    "ZeroWaste-f / WaRP-C are not wired into SOURCES: no confirmed Kaggle "
+    "mirror as of 2026-07, manual download required from the official "
+    "project pages. Add manually if pursued."
 )
 
 
 def summary() -> str:
     """Human-readable taxonomy summary (used by the CLI --show flag)."""
     lines = [f"Canonical taxonomy: {NUM_CLASSES} classes", ""]
-    by_group: dict[str, list[WasteClass]] = {}
     for c in CLASSES:
-        by_group.setdefault(c.group, []).append(c)
-    for group, members in by_group.items():
-        lines.append(f"[{group}]")
-        for c in members:
-            flag = " (blueprint)" if c.blueprint else ""
-            lines.append(f"  {NAME_TO_INDEX[c.name]:2d} {c.name:<14} {c.display}{flag}")
-        lines.append("")
+        lines.append(f"  {NAME_TO_INDEX[c.name]:2d} {c.name:<10} {c.display}"
+                      f"{'  - ' + c.note if c.note else ''}")
+    lines.append("")
     lines.append("Sources:")
     for s in SOURCES.values():
         mapped = sorted({v for v in s.mapping.values() if v})
         lines.append(f"  {s.key:<10} {s.kind:<7} -> {', '.join(mapped)}")
     lines.append("")
-    lines.append("NOTE: " + HAZARDOUS_GAP)
+    lines.append("NOTE: " + ZEROWASTE_F_GAP)
     return "\n".join(lines)
 
 

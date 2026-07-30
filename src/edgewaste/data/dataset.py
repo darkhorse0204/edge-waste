@@ -71,8 +71,9 @@ class WasteDataset(Dataset):
     def class_weights(self) -> torch.Tensor:
         """Inverse-frequency weights over the full canonical class set.
 
-        Empty classes (e.g. 'hazardous' before a source is added) get weight 0
-        so they don't distort the loss.
+        Any class with zero training samples gets weight 0 so it doesn't
+        distort the loss (defensive — all 7 classes should be populated once
+        `edgewaste-ingest` has run against all three declared sources).
         """
         counts = self.label_counts()
         weights = np.zeros(NUM_CLASSES, dtype=np.float32)
