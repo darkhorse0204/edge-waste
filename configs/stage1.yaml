@@ -18,7 +18,7 @@ model:
   image_size: 224
   fusion_dim: 512
   dropout: 0.2
-  pretrained: true
+  pretrained: false
 
 train:
   epochs: 15
@@ -33,3 +33,44 @@ train:
   grad_clip: 1.0
   output_dir: runs/stage1
   early_stop_patience: 5
+
+# Live-demo detector gate. This section MUST be here: run_camera.py passes this
+# file, not configs/detect.yaml, so without it the demo silently fell back to
+# the old 0.35 default and let weak detections through.
+detect:
+  conf_threshold: 0.45
+
+# Inference-time stability. Nothing below affects training or the checkpoint.
+infer:
+  cls_conf_threshold: 0.60   # below this -> "unknown" instead of a class
+  pad_frac: 0.15             # grow each box side by 15% before cropping
+  smoothing: mean            # mean | vote | none
+  history: 10                # frames of prediction memory per object
+  switch_margin: 0.05        # hysteresis before the label may change
+  iou_match: 0.30            # box overlap counting as the same object
+  max_age: 5                 # frames a track survives a detector dropout
+  colour_high: 0.80          # >= green
+  colour_mid: 0.60           # >= yellow, below -> red
+  show_hud: true
+
+# COCO object-identity stage (see src/edgewaste/recognize.py). Pretrained
+# weights, no training. Supplies a prior over the material classifier:
+#   certain     banana/scissors/book -> material follows from identity
+#   constrained bottle/cup/bowl      -> identity narrows, classifier picks
+#   unmapped    person/chair/dog     -> recognised but not waste, dropped
+recognize:
+  enabled: true
+  model: yolo26n.pt        # COCO-80 base weights (auto-downloads, ~5 MB)
+  conf_threshold: 0.50     # identity gate; raise if you see false labels
+  iou_match: 0.45          # overlap at which a COCO box == a waste box
+  add_unmatched: true      # let COCO contribute boxes TACO missed
+  certainty: 0.95          # mass for a certain mapping, scaled by ID confidence
+
+# Live Grad-CAM second window (toggle with 'g' during the demo).
+# Measured: one Grad-CAM pass = ~88 ms vs ~30 ms for a classification, so it
+# is throttled to one object every `interval` frames and cached in between.
+explain:
+  enabled: false     # start closed; press 'g' to open, or pass --gradcam
+  interval: 10       # frames between recomputes (~9 ms/frame amortised)
+  alpha: 0.5         # heatmap opacity: 0 = crop only, 1 = pure heatmap
+  tile: 300          # pixel size of each of the two panel tiles

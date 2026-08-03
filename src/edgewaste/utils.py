@@ -34,3 +34,30 @@ def accuracy(logits: torch.Tensor, targets: torch.Tensor) -> float:
 
 def count_parameters(model: torch.nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def pad_box(box: tuple[int, int, int, int], width: int, height: int,
+            pad_frac: float = 0.15) -> tuple[int, int, int, int]:
+    """Expand an xyxy box by `pad_frac` on every side, clamped to the frame.
+
+    A detector box hugs the object, so the classifier sees the item with its
+    edges cut off and no surrounding context — and the exact amount cut off
+    changes every frame as the box jitters, which changes the prediction.
+    Padding gives the crop a stable margin. Expansion is relative to each side
+    independently, so wide and tall boxes both grow proportionally.
+
+    Clamping means a box already touching a frame edge simply grows less on
+    that side; it never produces coordinates outside the image.
+    """
+    x1, y1, x2, y2 = box
+    dx = (x2 - x1) * pad_frac
+    dy = (y2 - y1) * pad_frac
+    px1 = max(0, int(round(x1 - dx)))
+    py1 = max(0, int(round(y1 - dy)))
+    px2 = min(width, int(round(x2 + dx)))
+    py2 = min(height, int(round(y2 + dy)))
+    # Degenerate result (possible only if the input box was already degenerate)
+    # — fall back to the original box rather than returning an empty crop.
+    if px2 <= px1 or py2 <= py1:
+        return box
+    return px1, py1, px2, py2
