@@ -1,7 +1,20 @@
 # PROJECT_STATUS.md
 ## Edge-Deployed Waste Classification with Sensor-Augmented Vision
 
-*Owner: Ansh | Last updated: 2026-07-30*
+*Owner: Ansh | Last updated: 2026-09-22*
+
+**2026-09-22 note:** this file was stale for 7 weeks (still said CPU-only,
+no ultralytics). A separate audit (`EdgeWaste_Project_Report.pdf`, 3 Aug)
+described a much more advanced state — trained checkpoints, OCI, Grad-CAM,
+12,751 logged detections — but that work lived only on a different machine
+and was never committed; this working directory had none of it (empty
+`runs/`, only the original 3 commits). Tonight's session (ahead of the
+Review-1 deadline) rebuilt Stage 2/3 in software with hardware simulated —
+see README.md's "What's built (Stage 2/3, hardware simulated)" table — and
+kicked off classifier + detector training on Colab (this machine's GPU is
+only 4GB; Colab's T4 is what actually produced the 94.95%/0.687 mAP50
+numbers the Aug 3 audit reported). Update the training-result rows below
+once Colab finishes.
 
 ---
 
@@ -85,12 +98,25 @@ no model has been trained. The immediate blocker is Kaggle credentials.
 - [ ] On-Pi benchmark (<500ms per item target)
 - [ ] INT8 quantization (if latency target not met)
 
-### Extensions (Stage 3 — after MVP validated)
-- [ ] Grad-CAM explainability (classifier)
-- [ ] MC-Dropout uncertainty estimation
+### Extensions (Stage 3)
+- [x] Grad-CAM explainability (classifier, ConvNeXt branch) — `explain.py`
+- [x] MC-Dropout uncertainty estimation — `confidence.py`
 - [ ] Category-conditional OCI weights
-- [ ] Flower federated learning
+- [x] Federated learning — single-process FedAvg simulation (`federated/`); real Flower/physical-device deployment not done
 - [ ] Full ablation suite + paper draft
+
+### Built tonight (2026-09-22) — software demo, hardware simulated
+- [x] `oci/` package: fixed-reference normalisation, 3-model fit (combined/moisture-only/gas-only), 5-fold CV ablation, sensitivity-constrained threshold — fitted on synthetic calibration data (`scripts/fit_oci_demo.py`)
+- [x] `sensors.py` — simulated moisture/gas/metal/load-cell readings, per-class-plausible with injected contamination events
+- [x] `decision.py` — decision engine (uncertainty -> manual review; OCI -> contaminated reject; else -> material bin) + mock conveyor actuator (logs the action)
+- [x] `confidence.py` — MC-Dropout uncertainty (stochastic passes, dropout-only, BatchNorm untouched)
+- [x] `explain.py` + `logging_utils.py` — Grad-CAM on keypress, per-detection CSV logging (unchanged in spirit from the Aug 3 audit's description, rewritten from scratch since that code no longer existed here)
+- [x] `federated/simulate.py` — FedAvg simulation (IID + non-IID shard partitioning, sample-weighted averaging), `edgewaste-federated` CLI
+- [x] `export_onnx.py` — classifier + detector ONNX export with PyTorch-parity verification, `edgewaste-export` CLI
+- [x] `pipeline.py` rewritten to integrate all of the above per-frame; `run_camera.py` session launcher
+- [x] All of the above unit- and integration-tested locally (stub detector + real image, tiny synthetic FL dataset, dummy-checkpoint ONNX export) — all passed
+- [ ] SHAP/LIME for OCI — not done, lowest priority given the deadline
+- [ ] Not done: real ONNX-on-Pi benchmark (no Pi), real hardware calibration (48h burn-in blocker, unchanged from the Aug 3 audit)
 
 ---
 
@@ -120,17 +146,17 @@ no model has been trained. The immediate blocker is Kaggle credentials.
 
 ## 🔧 Environment Status
 
-| Component | Status |
+| Component | Status (2026-09-22) |
 |---|---|
-| Python version | ✅ 3.12.6 (system Python, no venv) |
-| `edgewaste` importable | ✅ Yes (`pip install -e .` was already run) |
-| `torch` | ✅ 2.8.0+cpu |
-| `timm` | ✅ 1.0.25 |
-| CUDA GPU | ❌ Not available — CPU only |
-| `ultralytics` (YOLO26) | ❌ Not installed — run `pip install -e ".[detect]"` |
-| `kaggle` CLI module | ✅ Installed |
-| Kaggle credentials | ✅ `~/.kaggle/kaggle.json` exists |
-| Free disk space | ⚠️ ~20 GB — enough for data + 2 checkpoints (~200MB each), but monitor it |
+| Python version | 3.11 (Windows Store install, local-packages) |
+| `edgewaste` importable | ✅ Yes |
+| `torch` | ✅ 2.5.1+cu121 |
+| `timm` | ✅ 1.0.29 |
+| CUDA GPU | ✅ NVIDIA RTX 2050, **4GB VRAM** — fine for oci/confidence/decision/federated-smoke work, too small for full-dataset 50.7M-param training in reasonable time; classifier/detector training done on Colab's T4 instead |
+| `ultralytics` (YOLO26) | not yet installed locally (only needed for `edgewaste-pipeline`/`run_camera.py` once checkpoints exist) |
+| `grad-cam`, `onnx`, `onnxruntime`, `opencv-python`, `torchvision` | ✅ Installed tonight |
+| `kaggle` CLI module | not verified tonight — Colab notebook sets up its own credentials from Drive |
+| Free disk space | ⚠️ 13 GB free on C: (98% full) — same risk flagged before; checkpoint writes are atomic |
 
 ---
 
@@ -141,3 +167,4 @@ no model has been trained. The immediate blocker is Kaggle credentials.
 | 2026-07-30 | Synced repo (19 files changed, new detect/ module + pipeline.py). Read HANDOVER.md + Master-Work-Plan.md. Created PROJECT_STATUS.md and implementation_plan.md. Confirmed env: Python 3.12.6, torch 2.8.0+cpu, timm 1.0.25, edgewaste importable, Kaggle creds present, ultralytics missing, ~20GB disk free. |
 | 2026-07-31 | Set up Colab T4 GPU environment. Handled corrupted data in Trashbox. Successfully trained Hybrid ConvNeXt+ViT classifier — hit **95.1% val accuracy** on epoch 15! |
 | 2026-07-31 | Trained YOLO26n localizer on TACO for 60 epochs overnight. Hit **0.687 mAP50**. Stage 1 training is fully complete. |
+| 2026-09-22 | Found this working directory had regressed to "code complete, untrained" (empty `runs/`, only 3 original commits) despite an Aug 3 audit describing trained checkpoints + OCI + live sessions — that work only ever existed on a different machine and was never committed. Read all 4 faculty documents (Zero Review approval, Review-1 report, the Aug 3 audit). User needs the project "complete" by tonight for review; scoped to a full software demo with physical hardware simulated (agreed via clarifying questions). Built and locally tested: `oci/` package, `sensors.py`, `decision.py`, `confidence.py` (MC-Dropout), `explain.py` (Grad-CAM), `logging_utils.py`, `federated/simulate.py` (FedAvg simulation), `export_onnx.py`, rewrote `pipeline.py` to integrate everything, added `run_camera.py`. Kicked off classifier + detector training on Colab (`colab_training.ipynb`) since this machine's 4GB GPU can't train the 50.7M-param model in reasonable time. |

@@ -6,8 +6,15 @@ and the three planning docs at the repo root (tech-stack recommendation, project
 action plan, OCI calibration protocol) for the converged design this now follows.
 
 **Status:** Stage 1 (detect-then-classify vision pipeline) is implemented and
-wired end-to-end. Stage 2 (sensors, OCI, confidence, conveyor control) and
-Stage 3 (federated learning, explainability) are still design-only in `docs/`.
+wired end-to-end. Stage 2 (OCI, confidence, decision engine, conveyor
+control) and Stage 3 (federated learning, explainability) are now also
+implemented and wired end-to-end **in software, with physical hardware
+simulated** — see "What's built (Stage 2/3, hardware simulated)" below. No
+ESP32/sensors/Raspberry Pi/conveyor exist yet; OCI is fitted on synthetic
+calibration data (not the real 160-sample physical protocol) and Federated
+Learning runs as a single-process FedAvg simulation (not physically
+distributed devices). Swapping either for real hardware/deployment is a
+scoped, documented next step, not a rewrite — see the module docstrings.
 
 ## What's built (Stage 1)
 
@@ -53,6 +60,46 @@ classification sources ──ingest──► data/processed/<class>/  ──spli
 | TACO fetch + single-class YOLO label prep | [src/edgewaste/detect/data.py](src/edgewaste/detect/data.py) |
 | YOLO26 detector training | [src/edgewaste/detect/train.py](src/edgewaste/detect/train.py) |
 | Detect-then-classify pipeline (files + webcam) | [src/edgewaste/pipeline.py](src/edgewaste/pipeline.py) |
+
+## What's built (Stage 2/3, hardware simulated)
+
+| Module | File | Simulated? |
+|---|---|---|
+| Organic Contamination Index (fit / ablate / threshold) | [src/edgewaste/oci/](src/edgewaste/oci/) | Fitted on synthetic calibration data ([oci/synthetic.py](src/edgewaste/oci/synthetic.py)); math + fitting code is real |
+| Simulated moisture/gas/metal/load-cell sensors | [src/edgewaste/sensors.py](src/edgewaste/sensors.py) | Yes — no physical sensors exist |
+| MC-Dropout Bayesian uncertainty | [src/edgewaste/confidence.py](src/edgewaste/confidence.py) | No — real stochastic-pass estimation on the trained classifier |
+| Decision engine + mock conveyor actuator | [src/edgewaste/decision.py](src/edgewaste/decision.py) | Actuation is logged, not driven to GPIO |
+| Grad-CAM explainability (ConvNeXt branch) | [src/edgewaste/explain.py](src/edgewaste/explain.py) | No — real Grad-CAM; ViT branch still uncovered |
+| Per-detection CSV logging | [src/edgewaste/logging_utils.py](src/edgewaste/logging_utils.py) | No |
+| Federated learning (FedAvg simulation) | [src/edgewaste/federated/](src/edgewaste/federated/) | Single-process simulation, not physically distributed |
+| ONNX export + parity check | [src/edgewaste/export_onnx.py](src/edgewaste/export_onnx.py) | No — real export; on-Pi benchmark still pending hardware |
+| Full pipeline integration | [src/edgewaste/pipeline.py](src/edgewaste/pipeline.py), [run_camera.py](run_camera.py) | Ties all of the above together per-frame |
+
+```bash
+# OCI: fit + ablate + threshold on synthetic calibration data, print scores
+# under all three sensor-availability cases (both / moisture-only / gas-only)
+python scripts/fit_oci_demo.py
+python scripts/fit_oci_demo.py --csv path/to/real_calibration_data.csv  # once hardware exists
+
+# Federated learning: single-machine FedAvg simulation across virtual clients
+edgewaste-federated --config configs/stage1.yaml --num-clients 4 --rounds 3 --local-epochs 1
+edgewaste-federated --config configs/stage1.yaml --smoke   # tiny fast wiring check
+
+# ONNX export with PyTorch-parity verification (classifier + optionally detector)
+edgewaste-export --ckpt runs/stage1/best.pt --out runs/stage1/model.onnx \
+    --det-ckpt runs/detect/taco_single_class/weights/best.pt --det-out runs/detect/model.onnx
+
+# Full pipeline: detect -> classify -> MC-Dropout confidence -> simulated
+# sensors -> OCI -> decision engine -> mock conveyor actuation, all logged.
+# 'e' in camera mode saves a Grad-CAM heatmap for the last frame's detections.
+python run_camera.py --det-ckpt runs/detect/taco_single_class/weights/best.pt \
+    --cls-ckpt runs/stage1/best.pt
+edgewaste-pipeline --det-ckpt runs/detect/taco_single_class/weights/best.pt \
+    --cls-ckpt runs/stage1/best.pt --log-dir runs/logs/manual_session path/to/images
+```
+
+Install the extras: `pip install -e ".[detect,explain,export]"` (or see
+`requirements.txt`).
 
 ## Setup
 

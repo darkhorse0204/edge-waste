@@ -21,3 +21,10 @@ ultralytics>=8.4
 
 # Optional: only needed to auto-download public datasets for the class merge.
 kaggle>=1.6
+
+# Stage 2/3: explainability (Grad-CAM) and edge export. OCI + federated
+# learning simulation reuse the core deps above (sklearn, numpy, torch) —
+# nothing extra to install.
+grad-cam>=1.5
+onnx>=1.15
+onnxruntime>=1.17

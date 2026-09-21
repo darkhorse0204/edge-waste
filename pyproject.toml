@@ -29,6 +29,10 @@ data = ["kaggle>=1.6"]
 # Detection stage (YOLO26 item localization). See requirements.txt for the
 # version-pinning caveat.
 detect = ["ultralytics>=8.4"]
+# Stage 2/3: explainability, edge export. OCI and federated learning use
+# only sklearn/numpy/torch, already core deps.
+explain = ["grad-cam>=1.5"]
+export = ["onnx>=1.15", "onnxruntime>=1.17"]
 dev = ["pytest>=8.0", "ruff>=0.5"]
 
 [project.scripts]
@@ -41,6 +45,8 @@ edgewaste-infer = "edgewaste.infer:main"
 edgewaste-detect-fetch = "edgewaste.detect.data:main"
 edgewaste-detect-train = "edgewaste.detect.train:main"
 edgewaste-pipeline = "edgewaste.pipeline:main"
+edgewaste-federated = "edgewaste.federated.simulate:main"
+edgewaste-export = "edgewaste.export_onnx:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
