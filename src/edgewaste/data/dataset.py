@@ -8,11 +8,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
-from PIL import Image
+from PIL import Image, ImageFile
 from torch.utils.data import Dataset
 from torchvision import transforms
 
 from ..taxonomy import NUM_CLASSES
+
+# Public waste datasets routinely ship a few truncated JPEGs. Decoding what is
+# present beats aborting an epoch over the missing tail bytes.
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # ImageNet statistics (both timm ConvNeXt and ViT are pretrained on these).
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
@@ -44,6 +48,9 @@ def build_transforms(image_size: int, train: bool) -> transforms.Compose:
 class WasteDataset(Dataset):
     """Reads (path, label) rows for one split from the manifest CSV."""
 
+    # How many neighbouring samples to try before declaring the split broken.
+    _MAX_SUBSTITUTIONS = 50
+
     def __init__(self, manifest: str | Path, split: str, image_size: int,
                  train: bool | None = None):
         df = pd.read_csv(manifest)
@@ -53,16 +60,35 @@ class WasteDataset(Dataset):
         self.split = split
         is_train = (split == "train") if train is None else train
         self.transform = build_transforms(image_size, train=is_train)
+        self._unreadable: set[str] = set()
 
     def __len__(self) -> int:
         return len(self.df)
 
     def __getitem__(self, i: int):
-        row = self.df.iloc[i]
-        img = Image.open(row["path"]).convert("RGB")
-        x = self.transform(img)
-        y = int(row["label"])
-        return x, y
+        # A single unreadable file must never kill a multi-hour training run.
+        # Public dataset mirrors ship the occasional corrupt image, and losing
+        # four finished epochs to one of them is a far worse outcome than
+        # quietly training on a neighbouring sample instead. Each bad path is
+        # reported once so the corruption stays visible rather than silent.
+        n = len(self.df)
+        for offset in range(min(n, self._MAX_SUBSTITUTIONS)):
+            row = self.df.iloc[(i + offset) % n]
+            path = row["path"]
+            try:
+                img = Image.open(path).convert("RGB")
+            except Exception as exc:  # unreadable, truncated, or not an image
+                if path not in self._unreadable:
+                    self._unreadable.add(path)
+                    print(f"[WasteDataset] unreadable image skipped: {path} "
+                          f"({type(exc).__name__}: {exc})")
+                continue
+            return self.transform(img), int(row["label"])
+        raise RuntimeError(
+            f"{self._MAX_SUBSTITUTIONS} consecutive unreadable images from index "
+            f"{i} in split '{self.split}'. The dataset is likely corrupt or the "
+            f"paths in the manifest are stale — re-run edgewaste-ingest."
+        )
 
     # --- helpers for the trainer ---
     def label_counts(self) -> Counter:

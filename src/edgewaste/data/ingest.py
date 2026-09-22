@@ -24,6 +24,8 @@ import os
 import shutil
 from pathlib import Path
 
+from PIL import Image
+
 from ..config import Config
 from ..taxonomy import SOURCES, CLASS_NAMES, DataSource
 
@@ -34,6 +36,23 @@ def _iter_images(folder: Path):
     for p in folder.rglob("*"):
         if p.is_file() and p.suffix.lower() in IMAGE_EXTS:
             yield p
+
+
+def _is_readable_image(path: Path) -> bool:
+    """Whether PIL can actually decode this file.
+
+    Public dataset mirrors ship the occasional truncated or mislabelled file
+    (TrashBox has several). Catching them here keeps them out of the manifest
+    entirely, so training never has to deal with them. `verify()` alone is not
+    enough — it checks headers without decoding, and these files pass it and
+    then fail on load — so this forces a real decode.
+    """
+    try:
+        with Image.open(path) as im:
+            im.convert("RGB").load()
+        return True
+    except Exception:
+        return False
 
 
 def _normalize(name: str) -> str:
@@ -85,6 +104,7 @@ def ingest_source(
     wrapper levels of nesting the dataset's zip happens to unpack to.
     """
     counts: dict[str, int] = {}
+    skipped: list[str] = []
     if not root.exists():
         print(f"  [skip] {source.key}: {root} not found")
         return counts
@@ -101,12 +121,18 @@ def ingest_source(
         if canonical is None:
             continue  # deliberately dropped raw class
         for img in _iter_images(class_dir):
+            if not _is_readable_image(img):
+                skipped.append(str(img))
+                continue
             out_name = _dedupe_name(source.key, class_dir.name, img)
             out_path = processed_dir / canonical / out_name
             _link_or_copy(img, out_path)
             writer.writerow([canonical, source.key, class_dir.name,
                              str(img), out_name])
             counts[canonical] = counts.get(canonical, 0) + 1
+    if skipped:
+        print(f"  [warn] {source.key}: skipped {len(skipped)} unreadable image(s), "
+              f"e.g. {skipped[0]}")
     if not matched_any:
         raise KeyError(
             f"Source '{source.key}' has no folder anywhere under {root} "
