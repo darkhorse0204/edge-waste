@@ -1,15 +1,27 @@
 """Canonical waste taxonomy and per-source class mappings.
 
-Decision (superseding the 2026-07-18 "merge both" taxonomy recorded in
-PLAN.md's history): the project targets the **7-class recycling taxonomy**
-used by `Waste-Classification-Tech-Stack-Recommendation.md` /
-`Project-Action-Plan.md` — paper, cardboard, plastic, glass, metal, organic,
-other — sourced entirely from public datasets. The custom 18-class
-medical/PPE-skewed dataset (battery, mask, glove, syringe, iv_bag, cotton,
-...) is out of scope for this taxonomy; it isn't referenced below.
+**Decision (2026-09-23, supersedes the 11-class and earlier 7-class
+taxonomies):** the project targets a **33-class fine-grained item taxonomy**
+organised into **9 material families**.
 
-This module is the single source of truth for the taxonomy. Every data source
-declares how its raw folder names map onto the canonical classes, so
+Why fine-grained, and why a hierarchy. A flat "plastic / glass / metal"
+label is not what a sorting facility acts on: a PET drinks bottle, a
+detergent bottle and a plastic bag are all "plastic" but go to different
+processes, while a polystyrene cup is not processed with either. So the
+classifier predicts the *item* (33 classes) and the family is derived from
+it (9 families). Both levels are reported: fine-grained accuracy measures
+item recognition, family accuracy measures whether the item would be
+physically routed correctly. Confusing `plastic_water_bottles` with
+`plastic_soda_bottles` is a fine-grained error but a routing success, and
+splitting the metric this way makes that visible instead of hiding it.
+
+The hazardous families exist for a different reason than the rest: battery,
+e-waste and medical items must never reach a recycling or compost stream at
+all (fire, injury, regulated disposal), so they are separated at the
+taxonomy level rather than left inside a catch-all.
+
+This module is the single source of truth for the taxonomy. Every data
+source declares how its raw folder names map onto the canonical classes, so
 consolidation is a lookup, never an ad-hoc rename scattered through scripts.
 """
 
@@ -24,49 +36,92 @@ class WasteClass:
 
     name: str  # canonical id, lowercase snake_case
     display: str  # human-readable label
+    family: str  # material family this item rolls up into
     note: str = ""
 
 
 # ---------------------------------------------------------------------------
-# Canonical 7-class taxonomy (docs' "paper, cardboard, plastic, glass, metal,
-# organic, other/reject" list).
+# Material families. These are the physical streams a sorter routes to; the
+# 33 item classes below each belong to exactly one.
+# ---------------------------------------------------------------------------
+FAMILIES: tuple[str, ...] = (
+    "plastic", "paper", "cardboard", "glass", "metal",
+    "organic", "styrofoam", "textile", "hazardous",
+)
+
+# Families that must never be routed into a recycling or compost stream.
+HAZARDOUS_FAMILIES: frozenset[str] = frozenset({"hazardous"})
+
+
+# ---------------------------------------------------------------------------
+# The 33-class fine-grained taxonomy. Tuple order defines the classifier
+# head's index order and is embedded into every checkpoint.
 # ---------------------------------------------------------------------------
 CLASSES: tuple[WasteClass, ...] = (
-    # --- core recyclable material streams ---
-    WasteClass("cardboard", "Cardboard"),
-    WasteClass("paper", "Paper"),
-    WasteClass("plastic", "Plastic"),
-    WasteClass("glass", "Glass"),
-    WasteClass("metal", "Metal"),
-    # --- compostable ---
-    WasteClass("organic", "Organic / Biological",
-               note="food and garden waste; the stream the OCI contamination "
-                    "index is about"),
-    # --- separately-collected streams ---
-    WasteClass("textile", "Textile",
-               note="clothes and shoes: a distinct recycling stream, not "
-                    "general trash"),
-    # --- hazardous: must never enter a recycling or compost stream ---
-    WasteClass("battery", "Battery (hazardous)",
-               note="fire risk in collection vehicles and sorting plants; "
-                    "requires dedicated collection"),
-    WasteClass("e_waste", "E-Waste (hazardous)",
-               note="WEEE: heavy metals and recoverable rare earths; "
-                    "regulated disposal"),
-    WasteClass("medical", "Medical (hazardous)",
-               note="sharps/biohazard risk; requires incineration or "
-                    "specialised treatment"),
-    # --- genuine catch-all, now much smaller ---
-    WasteClass("other", "Other / Non-recyclable",
-               note="general residual trash only - the hazardous, textile and "
-                    "organic streams that used to be pooled here are now "
-                    "their own classes"),
+    # --- plastic (9) ---
+    WasteClass("plastic_water_bottles", "Plastic water bottle", "plastic"),
+    WasteClass("plastic_soda_bottles", "Plastic soda bottle", "plastic"),
+    WasteClass("plastic_detergent_bottles", "Plastic detergent bottle", "plastic"),
+    WasteClass("plastic_food_containers", "Plastic food container", "plastic"),
+    WasteClass("plastic_shopping_bags", "Plastic shopping bag", "plastic"),
+    WasteClass("plastic_trash_bags", "Plastic trash bag", "plastic"),
+    WasteClass("plastic_cup_lids", "Plastic cup lid", "plastic"),
+    WasteClass("plastic_straws", "Plastic straw", "plastic"),
+    WasteClass("disposable_plastic_cutlery", "Disposable plastic cutlery", "plastic"),
+    # --- paper (4) ---
+    WasteClass("newspaper", "Newspaper", "paper"),
+    WasteClass("magazines", "Magazine", "paper"),
+    WasteClass("office_paper", "Office paper", "paper"),
+    WasteClass("paper_cups", "Paper cup", "paper",
+               note="usually poly-coated, so a family-level 'paper' routing "
+                    "is an approximation worth flagging in the report"),
+    # --- cardboard (2) — a separate stream from mixed paper in practice ---
+    WasteClass("cardboard_boxes", "Cardboard box", "cardboard"),
+    WasteClass("cardboard_packaging", "Cardboard packaging", "cardboard"),
+    # --- glass (3) ---
+    WasteClass("glass_beverage_bottles", "Glass beverage bottle", "glass"),
+    WasteClass("glass_food_jars", "Glass food jar", "glass"),
+    WasteClass("glass_cosmetic_containers", "Glass cosmetic container", "glass"),
+    # --- metal (4) ---
+    WasteClass("aluminum_soda_cans", "Aluminium soda can", "metal"),
+    WasteClass("aluminum_food_cans", "Aluminium food can", "metal"),
+    WasteClass("steel_food_cans", "Steel food can", "metal"),
+    WasteClass("aerosol_cans", "Aerosol can", "metal",
+               note="pressurised: a puncture hazard upstream of shredding, "
+                    "even though the material itself is recyclable metal"),
+    # --- organic (4) ---
+    WasteClass("food_waste", "Food waste", "organic"),
+    WasteClass("eggshells", "Eggshells", "organic"),
+    WasteClass("coffee_grounds", "Coffee grounds", "organic"),
+    WasteClass("tea_bags", "Tea bags", "organic"),
+    # --- styrofoam (2) — EPS is not processed with other plastics ---
+    WasteClass("styrofoam_cups", "Styrofoam cup", "styrofoam"),
+    WasteClass("styrofoam_food_containers", "Styrofoam food container", "styrofoam"),
+    # --- textile (2) ---
+    WasteClass("clothing", "Clothing", "textile"),
+    WasteClass("shoes", "Shoes", "textile"),
+    # --- hazardous (3) — never routed to recycling or compost ---
+    WasteClass("battery", "Battery", "hazardous",
+               note="fire risk in collection vehicles and sorting plants"),
+    WasteClass("e_waste", "E-waste", "hazardous",
+               note="WEEE: heavy metals and recoverable rare earths"),
+    WasteClass("medical", "Medical waste", "hazardous",
+               note="sharps/biohazard risk; incineration or specialised "
+                    "treatment"),
 )
 
 # Ordered canonical class names — this order defines the classifier head indices.
 CLASS_NAMES: tuple[str, ...] = tuple(c.name for c in CLASSES)
 NAME_TO_INDEX: dict[str, int] = {name: i for i, name in enumerate(CLASS_NAMES)}
 NUM_CLASSES: int = len(CLASSES)
+
+# Item class -> material family, and the reverse index.
+CLASS_TO_FAMILY: dict[str, str] = {c.name: c.family for c in CLASSES}
+FAMILY_TO_CLASSES: dict[str, tuple[str, ...]] = {
+    fam: tuple(c.name for c in CLASSES if c.family == fam) for fam in FAMILIES
+}
+FAMILY_TO_INDEX: dict[str, int] = {fam: i for i, fam in enumerate(FAMILIES)}
+NUM_FAMILIES: int = len(FAMILIES)
 
 
 def class_index(name: str) -> int:
@@ -78,17 +133,42 @@ def class_index(name: str) -> int:
         ) from exc
 
 
+def family_of(name: str) -> str:
+    """Material family for an item class."""
+    try:
+        return CLASS_TO_FAMILY[name]
+    except KeyError as exc:  # pragma: no cover - defensive
+        raise KeyError(
+            f"'{name}' is not a canonical class. Known: {CLASS_NAMES}"
+        ) from exc
+
+
+def family_index_of(name: str) -> int:
+    """Family index for an item class — used for hierarchical evaluation."""
+    return FAMILY_TO_INDEX[family_of(name)]
+
+
+def is_hazardous(name: str) -> bool:
+    """Whether this item class belongs to a hazardous family."""
+    return CLASS_TO_FAMILY.get(name) in HAZARDOUS_FAMILIES
+
+
 # ---------------------------------------------------------------------------
 # Data sources and their raw -> canonical folder mappings.
 #
-# A mapping value of None means "drop this raw class" (not part of our target).
-# Any raw folder not present in a source's `mapping` is treated as an error at
-# ingest time, so new/renamed source folders can't be silently mis-binned.
+# A mapping value of None means "drop this raw class". Any raw folder not
+# present in a source's `mapping` is treated as an error at ingest time, so
+# new/renamed source folders can't be silently mis-binned.
 #
-# All three sources below are classification (folder-per-class) datasets —
-# compatible with `edgewaste.data.ingest`'s ImageFolder-style consolidation.
-# TACO and ZeroWaste-f (the docs' detection/localization datasets) are NOT
-# folder-per-class and are handled separately by `edgewaste.detect`, not here.
+# Note on the coarse legacy sources: TrashNet's and TrashBox's plain
+# 'plastic'/'glass'/'metal'/'paper' folders are deliberately dropped. A
+# folder labelled only 'glass' cannot be assigned to glass_beverage_bottles
+# vs glass_food_jars vs glass_cosmetic_containers without inventing a label,
+# and mixing a coarse 'glass' class alongside the three fine ones would make
+# the class depend on which dataset an image came from rather than on the
+# object. Those sources are kept only for the classes they *can* resolve
+# unambiguously — which for TrashBox is e-waste and medical, the two
+# hazardous streams nothing else covers.
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class DataSource:
@@ -101,24 +181,33 @@ class DataSource:
     note: str = ""
 
 
-TRASHNET = DataSource(
-    key="trashnet",
-    title="TrashNet (Kaggle mirror: asdasdasasdas/garbage-classification)",
+RECYCLABLE_HOUSEHOLD = DataSource(
+    key="recyclable_household",
+    title="Recyclable and Household Waste Classification "
+          "(Kaggle: alistairking/recyclable-and-household-waste-classification)",
     kind="kaggle",
-    locator="asdasdasasdas/garbage-classification",
-    mapping={
-        "cardboard": "cardboard",
-        "glass": "glass",
-        "metal": "metal",
-        "paper": "paper",
-        "plastic": "plastic",
-        "trash": "other",
-    },
-    note="Classic 6-class TrashNet mirror, ~2,527 images, clean lab "
-         "background. Folder nesting varies by release (commonly "
-         "'Garbage classification/Garbage classification/<class>/') — ingest "
-         "walks the whole tree matching on leaf folder name, so nesting "
-         "depth doesn't matter.",
+    locator="alistairking/recyclable-and-household-waste-classification",
+    # Folder names already match the canonical class names one-for-one.
+    mapping={name: name for name in (
+        "plastic_water_bottles", "plastic_soda_bottles",
+        "plastic_detergent_bottles", "plastic_food_containers",
+        "plastic_shopping_bags", "plastic_trash_bags", "plastic_cup_lids",
+        "plastic_straws", "disposable_plastic_cutlery",
+        "newspaper", "magazines", "office_paper", "paper_cups",
+        "cardboard_boxes", "cardboard_packaging",
+        "glass_beverage_bottles", "glass_food_jars",
+        "glass_cosmetic_containers",
+        "aluminum_soda_cans", "aluminum_food_cans", "steel_food_cans",
+        "aerosol_cans",
+        "food_waste", "eggshells", "coffee_grounds", "tea_bags",
+        "styrofoam_cups", "styrofoam_food_containers",
+        "clothing", "shoes",
+    )},
+    note="30 balanced item classes (~500 images each, 15k total), the "
+         "backbone of the taxonomy. Each class folder holds a 'default' "
+         "(studio) and a 'real_world' subfolder; ingest pulls both, and the "
+         "split is recoverable from provenance.csv's source_path for a "
+         "studio-vs-real-world domain-gap ablation.",
 )
 
 TRASHBOX = DataSource(
@@ -127,21 +216,18 @@ TRASHBOX = DataSource(
     kind="kaggle",
     locator="minhle13/trashbox",
     mapping={
-        "cardboard": "cardboard",
-        "glass": "glass",
-        "metal": "metal",
-        "paper": "paper",
-        "plastic": "plastic",
-        # Kept as their own hazardous classes rather than pooled into
-        # 'other' — a sorter that cannot tell a syringe from a crisp packet
-        # is not deployable.
+        # Coarse material folders: dropped, see the note above.
+        "cardboard": None,
+        "glass": None,
+        "metal": None,
+        "paper": None,
+        "plastic": None,
+        # The two hazardous streams no other source covers.
         "e-waste": "e_waste",
         "medical": "medical",
     },
-    note="~14.3k in-the-wild/web-sourced images across 7 classes; fills "
-         "TrashNet's diversity gap per the tech-stack doc's combination "
-         "strategy. Verify folder names after download (e-waste/medical "
-         "spelling can vary by mirror release).",
+    note="Kept solely for its e-waste and medical folders — the hazardous "
+         "classes the household dataset lacks entirely.",
 )
 
 GARBAGE_12 = DataSource(
@@ -150,60 +236,70 @@ GARBAGE_12 = DataSource(
     kind="kaggle",
     locator="mostafaabla/garbage-classification",
     mapping={
-        "paper": "paper",
-        "cardboard": "cardboard",
-        "biological": "organic",
-        "metal": "metal",
-        "plastic": "plastic",
-        # Colour is merged: only this source labels glass by colour, so
-        # keeping green/brown/white apart would make the class depend on
-        # which dataset an image came from rather than on the glass itself.
-        "green-glass": "glass",
-        "brown-glass": "glass",
-        "white-glass": "glass",
-        "clothes": "textile",
-        "shoes": "textile",
+        # Coarse material folders: dropped, see the note above.
+        "paper": None,
+        "cardboard": None,
+        "metal": None,
+        "plastic": None,
+        "green-glass": None,
+        "brown-glass": None,
+        "white-glass": None,
+        "trash": None,
+        # Resolvable classes.
         "battery": "battery",
-        "trash": "other",
+        "clothes": "clothing",
+        "shoes": "shoes",
+        # 'biological' is food/garden scraps, i.e. this taxonomy's food_waste.
+        "biological": "food_waste",
     },
-    note="Primary source for 'organic' (its 'biological' folder) — neither "
-         "TrashNet nor TrashBox has an organic/food-waste class.",
+    note="Contributes the battery hazardous class, plus extra textile and "
+         "food-waste images on top of the household dataset's.",
 )
 
 SOURCES: dict[str, DataSource] = {
-    s.key: s for s in (TRASHNET, TRASHBOX, GARBAGE_12)
+    s.key: s for s in (RECYCLABLE_HOUSEHOLD, TRASHBOX, GARBAGE_12)
 }
 
 # ---------------------------------------------------------------------------
-# Known gap, surfaced deliberately rather than hidden: the tech-stack doc also
-# names ZeroWaste-f and WaRP-C as useful additions (closest domain match to an
-# actual conveyor deployment). Neither has a confirmed Kaggle mirror as of
-# 2026-07 — ZeroWaste-f is distributed from http://ai.bu.edu/zerowaste/ under
-# manual download, not a simple `kaggle datasets download` call — so they are
-# NOT wired into SOURCES yet. Add them by hand (download_dir + a `local`-kind
-# path) if/when you fetch them manually; the ingest pipeline's per-source
-# mapping design supports that without other changes.
+# TrashNet (asdasdasasdas/garbage-classification) is no longer wired in: all
+# six of its folders are coarse material labels with no unambiguous
+# fine-grained target, so under this taxonomy it would contribute nothing.
+# It remains the right source if the project ever reverts to a flat
+# material-only taxonomy.
+#
+# WaRP (parohod/warp-waste-recycling-plant-dataset) IS now on Kaggle — the
+# long-standing "no confirmed mirror" gap is closed. 28 classes of real
+# recycling-plant imagery with overlap, deformation and poor lighting; the
+# natural next addition for a robustness/hard-case evaluation, at 845 MB.
+# Not wired in yet: its classes are mostly fine-grained plastic-bottle
+# variants that would need their own mapping decisions.
 # ---------------------------------------------------------------------------
-ZEROWASTE_F_GAP = (
-    "ZeroWaste-f / WaRP-C are not wired into SOURCES: no confirmed Kaggle "
-    "mirror as of 2026-07, manual download required from the official "
-    "project pages. Add manually if pursued."
+WARP_NOTE = (
+    "WaRP is available at parohod/warp-waste-recycling-plant-dataset (845 MB, "
+    "28 classes, real plant conditions). Candidate for a robustness "
+    "evaluation; needs a mapping decision for its plastic-bottle variants."
 )
 
 
 def summary() -> str:
     """Human-readable taxonomy summary (used by the CLI --show flag)."""
-    lines = [f"Canonical taxonomy: {NUM_CLASSES} classes", ""]
-    for c in CLASSES:
-        lines.append(f"  {NAME_TO_INDEX[c.name]:2d} {c.name:<10} {c.display}"
-                      f"{'  - ' + c.note if c.note else ''}")
-    lines.append("")
+    lines = [f"Canonical taxonomy: {NUM_CLASSES} item classes "
+             f"in {NUM_FAMILIES} material families", ""]
+    for fam in FAMILIES:
+        members = FAMILY_TO_CLASSES[fam]
+        flag = "  [HAZARDOUS]" if fam in HAZARDOUS_FAMILIES else ""
+        lines.append(f"  {fam.upper()}{flag}  ({len(members)})")
+        for name in members:
+            lines.append(f"    {NAME_TO_INDEX[name]:2d} {name}")
+        lines.append("")
     lines.append("Sources:")
     for s in SOURCES.values():
         mapped = sorted({v for v in s.mapping.values() if v})
-        lines.append(f"  {s.key:<10} {s.kind:<7} -> {', '.join(mapped)}")
+        dropped = sum(1 for v in s.mapping.values() if v is None)
+        lines.append(f"  {s.key:<22} {len(mapped):>2} classes"
+                     f"{f' ({dropped} coarse folders dropped)' if dropped else ''}")
     lines.append("")
-    lines.append("NOTE: " + ZEROWASTE_F_GAP)
+    lines.append("NOTE: " + WARP_NOTE)
     return "\n".join(lines)
 
 

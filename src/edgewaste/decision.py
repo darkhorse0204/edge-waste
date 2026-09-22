@@ -11,19 +11,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .taxonomy import CLASS_NAMES
+from .taxonomy import FAMILIES, FAMILY_TO_INDEX, family_of, is_hazardous
 
-# Gate index per canonical class, plus two extra gates for items the vision
-# model is unsure about or that OCI flags as contaminated.
-GATE_INDEX: dict[str, int] = {name: i for i, name in enumerate(CLASS_NAMES)}
-GATE_MANUAL_REVIEW = len(CLASS_NAMES)
-GATE_CONTAMINATED_REJECT = len(CLASS_NAMES) + 1
-GATE_HAZARDOUS = len(CLASS_NAMES) + 2
-
-# Streams that must never reach a recycling or compost gate: a battery in a
-# paper bale is a fire, a syringe in a sorting line is an injury. These are
-# routed on class alone, before any contamination or confidence logic.
-HAZARDOUS_CLASSES = frozenset({"battery", "e_waste", "medical"})
+# A physical sorter has one gate per *material family*, not per item class:
+# a water bottle and a soda bottle go down the same chute. So gates are
+# indexed by family, plus two extra gates for items the vision model is
+# unsure about or that OCI flags as contaminated.
+GATE_INDEX: dict[str, int] = dict(FAMILY_TO_INDEX)
+GATE_MANUAL_REVIEW = len(FAMILIES)
+GATE_CONTAMINATED_REJECT = len(FAMILIES) + 1
 
 UNCERTAINTY_REVIEW_THRESHOLD = 0.5  # normalised predictive entropy
 OCI_CONTAMINATION_THRESHOLD = 0.5  # sigmoid score; overridden by select_threshold() when calibrated
@@ -31,11 +27,12 @@ OCI_CONTAMINATION_THRESHOLD = 0.5  # sigmoid score; overridden by select_thresho
 
 @dataclass
 class Decision:
-    class_name: str
+    class_name: str  # fine-grained item class
+    family: str  # material family it rolls up into
     cls_conf: float
     uncertainty: float
     oci_score: float | None
-    route: str  # canonical class name, "manual_review", or "contaminated_reject"
+    route: str  # a material family, "manual_review", or "contaminated_reject"
     gate: int
     reason: str
 
@@ -54,26 +51,33 @@ def decide(
     to the hazardous gate even when the model is unsure, because the cost of
     a missed hazard (fire, injury) is far above the cost of a human checking
     a false alarm.
+
+    Routing is by material *family*, not item class: a water bottle and a
+    soda bottle share a chute, so a fine-grained confusion within a family
+    is harmless at this stage. That is what makes the hierarchical metric in
+    `evaluate.py` the one that reflects real sorting performance.
     """
-    if class_name in HAZARDOUS_CLASSES:
-        return Decision(class_name, cls_conf, uncertainty, oci_score,
-                         route="hazardous", gate=GATE_HAZARDOUS,
+    family = family_of(class_name)
+
+    if is_hazardous(class_name):
+        return Decision(class_name, family, cls_conf, uncertainty, oci_score,
+                         route="hazardous", gate=GATE_INDEX["hazardous"],
                          reason=f"'{class_name}' is a hazardous stream - "
                                 f"never routed to recycling or compost")
 
     if uncertainty >= uncertainty_threshold:
-        return Decision(class_name, cls_conf, uncertainty, oci_score,
+        return Decision(class_name, family, cls_conf, uncertainty, oci_score,
                          route="manual_review", gate=GATE_MANUAL_REVIEW,
                          reason=f"uncertainty {uncertainty:.2f} >= {uncertainty_threshold:.2f}")
 
-    if oci_score is not None and oci_score >= oci_threshold and class_name != "organic":
-        return Decision(class_name, cls_conf, uncertainty, oci_score,
+    if oci_score is not None and oci_score >= oci_threshold and family != "organic":
+        return Decision(class_name, family, cls_conf, uncertainty, oci_score,
                          route="contaminated_reject", gate=GATE_CONTAMINATED_REJECT,
                          reason=f"OCI {oci_score:.2f} >= {oci_threshold:.2f} on a "
                                 f"non-organic item - recycling-stream contamination risk")
 
-    return Decision(class_name, cls_conf, uncertainty, oci_score,
-                     route=class_name, gate=GATE_INDEX.get(class_name, GATE_MANUAL_REVIEW),
+    return Decision(class_name, family, cls_conf, uncertainty, oci_score,
+                     route=family, gate=GATE_INDEX[family],
                      reason="clean classification, low uncertainty, OCI below threshold")
 
 
@@ -82,7 +86,7 @@ def actuate_conveyor(decision: Decision) -> str:
     line; a real deployment would drive a GPIO servo to gate `decision.gate`
     instead of just logging it."""
     msg = (f"[CONVEYOR] gate={decision.gate:<2} route={decision.route:<20} "
-           f"class={decision.class_name:<10} conf={decision.cls_conf*100:5.1f}%  "
+           f"item={decision.class_name:<28} conf={decision.cls_conf*100:5.1f}%  "
            f"({decision.reason})")
     print(msg)
     return msg

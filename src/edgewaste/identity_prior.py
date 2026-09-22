@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import torch
 
-from .taxonomy import CLASS_NAMES
+from .taxonomy import CLASS_NAMES, FAMILY_TO_CLASSES, is_hazardous
 
 # How much to down-weight a material the object identity makes implausible.
 # Not zero: see the module docstring on hard-masking.
@@ -39,43 +39,63 @@ IMPLAUSIBLE_WEIGHT = 0.15
 
 # object class (as the 18-class TACO detector names it) -> plausible materials.
 # An empty set means "uninformative": every material stays at weight 1.0.
+# Entries may name either a material *family* (expanded to all its item
+# classes) or specific item classes, whichever the object identity actually
+# pins down. 'Straw' names one item exactly; 'Can' names a family.
 OBJECT_MATERIAL_PRIOR: dict[str, set[str]] = {
     "Aluminium foil": {"metal"},
-    "Bottle cap": {"plastic", "metal"},
-    "Bottle": {"plastic", "glass"},
+    "Bottle cap": {"plastic_cup_lids", "metal"},
+    # A bottle silhouette is genuinely ambiguous between plastic and glass —
+    # exactly the confusion the project's own problem statement calls out.
+    "Bottle": {"plastic_water_bottles", "plastic_soda_bottles",
+               "plastic_detergent_bottles", "glass_beverage_bottles"},
     "Broken glass": {"glass"},
     "Can": {"metal"},
     "Carton": {"cardboard", "paper"},
-    "Cigarette": {"other"},
-    "Cup": {"paper", "plastic"},
-    "Lid": {"plastic", "metal"},
+    "Cigarette": set(),  # no item class covers cigarette butts
+    "Cup": {"paper_cups", "styrofoam_cups", "plastic_cup_lids"},
+    "Lid": {"plastic_cup_lids", "metal"},
     "Other litter": set(),
-    "Other plastic": {"plastic"},
+    "Other plastic": {"plastic", "styrofoam"},
     "Paper": {"paper"},
-    "Plastic bag - wrapper": {"plastic"},
-    "Plastic container": {"plastic"},
+    "Plastic bag - wrapper": {"plastic_shopping_bags", "plastic_trash_bags"},
+    "Plastic container": {"plastic_food_containers", "plastic_detergent_bottles"},
     "Pop tab": {"metal"},
-    "Straw": {"plastic"},
-    # Styrofoam is expanded polystyrene, i.e. a plastic.
-    "Styrofoam piece": {"plastic"},
+    "Straw": {"plastic_straws"},
+    # Expanded polystyrene: its own family, not processed with other plastics.
+    "Styrofoam piece": {"styrofoam"},
     "Unlabeled litter": set(),
 }
 
 # The detector is trained on outdoor litter and has no object class for the
-# hazardous or textile streams. It will therefore label a battery or a
-# syringe as 'Other litter'/'Unlabeled litter' — both uninformative, so the
-# prior stays uniform and the classifier's hazardous call survives untouched.
-# This is deliberate: the prior must never be able to talk the classifier
-# *out of* flagging a hazard.
-HAZARD_SAFE_MATERIALS = frozenset({"battery", "e_waste", "medical"})
+# hazardous stream. A battery or syringe therefore arrives as 'Other
+# litter'/'Unlabeled litter' — both uninformative, so the prior stays uniform
+# and the classifier's hazardous call survives untouched. Belt and braces:
+# hazardous classes are additionally exempted below, so the prior can never
+# talk the classifier *out of* flagging a hazard.
+HAZARD_SAFE_MATERIALS: frozenset[str] = frozenset(
+    name for name in CLASS_NAMES if is_hazardous(name)
+)
+
+
+def _expand(entries: set[str]) -> set[str]:
+    """Resolve a prior entry set (families and/or item classes) to item classes."""
+    resolved: set[str] = set()
+    for entry in entries:
+        if entry in FAMILY_TO_CLASSES:
+            resolved.update(FAMILY_TO_CLASSES[entry])
+        else:
+            resolved.add(entry)
+    return resolved
 
 
 def prior_vector(object_class: str, class_names: list[str] | tuple[str, ...] = CLASS_NAMES
                   ) -> torch.Tensor:
     """Per-material weights implied by an object class. Uniform if unknown."""
-    plausible = OBJECT_MATERIAL_PRIOR.get(object_class)
-    if not plausible:  # unknown object, or an uninformative catch-all
+    entries = OBJECT_MATERIAL_PRIOR.get(object_class)
+    if not entries:  # unknown object, or an uninformative catch-all
         return torch.ones(len(class_names))
+    plausible = _expand(entries)
     return torch.tensor([
         # Hazardous materials are never down-weighted: the prior may not
         # suppress a hazard flag (see HAZARD_SAFE_MATERIALS).
@@ -100,23 +120,23 @@ def apply_identity_prior(
 
 def is_consistent(object_class: str, material: str) -> bool:
     """Whether this object/material pairing is physically plausible."""
-    plausible = OBJECT_MATERIAL_PRIOR.get(object_class)
-    if not plausible:
+    entries = OBJECT_MATERIAL_PRIOR.get(object_class)
+    if not entries:
         return True  # uninformative object identity can't contradict anything
     if material in HAZARD_SAFE_MATERIALS:
         return True  # a hazard call is never treated as a contradiction
-    return material in plausible
+    return material in _expand(entries)
 
 
 def explain(object_class: str, material: str) -> str:
     """One-line human-readable verdict, for logs and the report."""
-    plausible = OBJECT_MATERIAL_PRIOR.get(object_class)
-    if not plausible:
+    entries = OBJECT_MATERIAL_PRIOR.get(object_class)
+    if not entries:
         return f"'{object_class}' implies no material constraint"
     if material in HAZARD_SAFE_MATERIALS:
         return (f"hazard call '{material}' kept over object identity "
                 f"'{object_class}' - hazard flags are never overridden")
-    if material in plausible:
+    if material in _expand(entries):
         return f"'{material}' is consistent with '{object_class}'"
-    return (f"CONTRADICTION: '{object_class}' implies "
-            f"{sorted(plausible)}, classifier said '{material}'")
+    return (f"CONTRADICTION: '{object_class}' implies {sorted(entries)}, "
+            f"classifier said '{material}'")

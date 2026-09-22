@@ -1,7 +1,7 @@
-"""Download the public datasets that make up the 7-class vision corpus.
+"""Download the public datasets that make up the 33-class vision corpus.
 
-All three declared sources (TrashNet, TrashBox, Garbage-Classification-12) are
-Kaggle-hosted. Requires the `kaggle` package and API credentials in
+All declared sources (Recyclable & Household Waste, TrashBox, Garbage-12)
+are Kaggle-hosted. Requires the `kaggle` package and API credentials in
 ``~/.kaggle/kaggle.json`` (or the KAGGLE_USERNAME / KAGGLE_KEY env vars). If
 neither is available the command explains how to set them up and exits
 without error rather than failing the whole pipeline.
@@ -23,8 +23,8 @@ Kaggle credentials not found. To enable public-dataset download:
         {home}/.kaggle/kaggle.json
      (or set KAGGLE_USERNAME and KAGGLE_KEY environment variables)
 Then re-run: edgewaste-fetch
-Until then, there is no data to train on — all three Stage 1 vision sources
-are Kaggle-hosted (see edgewaste.taxonomy.SOURCES).
+Until then, there is no data to train on — all Stage 1 vision sources are
+Kaggle-hosted (see edgewaste.taxonomy.SOURCES).
 """
 
 

@@ -19,6 +19,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .oci.normalize import CalibrationAnchors
+from .taxonomy import CLASS_TO_FAMILY
 
 # Same anchors as oci/synthetic.py so simulated readings and the OCI model
 # fitted on synthetic calibration data speak the same units.
@@ -29,12 +30,14 @@ SIM_ANCHORS = CalibrationAnchors(m_dry=200.0, m_wet=800.0, r0=10_000.0, l_min=0.
 # Organic is deliberately wet/high-gas by construction; everything else is
 # low but non-zero, so an occasional "greasy pizza box" (contaminated
 # cardboard) is possible and gives OCI something to catch.
+# Keyed by material *family*: wetness is a property of what the item is made
+# of and what it held, not of which specific bottle variant it is.
 _BASE_WETNESS = {
     "organic": 0.85, "cardboard": 0.15, "paper": 0.15, "plastic": 0.10,
-    "glass": 0.05, "metal": 0.05, "textile": 0.20, "battery": 0.05,
-    "e_waste": 0.05, "medical": 0.30, "other": 0.20,
+    "glass": 0.05, "metal": 0.05, "styrofoam": 0.12, "textile": 0.20,
+    "hazardous": 0.10,
 }
-_METAL_TRUE_RATE = {"metal": 0.95, "battery": 0.80, "e_waste": 0.70, "other": 0.05}
+_METAL_TRUE_RATE = {"metal": 0.95, "hazardous": 0.60}
 
 
 @dataclass
@@ -49,9 +52,12 @@ def simulate_sensors(
     class_name: str, rng: np.random.Generator | None = None,
     contamination_event_prob: float = 0.08,
 ) -> SensorReading:
+    """`class_name` is a fine-grained item class; readings are drawn from its
+    material family's profile."""
     rng = rng or np.random.default_rng()
-    base = _BASE_WETNESS.get(class_name, 0.15)
-    if rng.random() < contamination_event_prob and class_name != "organic":
+    family = CLASS_TO_FAMILY.get(class_name, class_name)
+    base = _BASE_WETNESS.get(family, 0.15)
+    if rng.random() < contamination_event_prob and family != "organic":
         base = min(1.0, base + rng.uniform(0.4, 0.7))  # a contamination event
 
     wetness = float(np.clip(base + rng.normal(0, 0.08), 0, 1))
@@ -60,7 +66,7 @@ def simulate_sensors(
     moisture_raw = SIM_ANCHORS.m_dry + wetness * (SIM_ANCHORS.m_wet - SIM_ANCHORS.m_dry)
     rs = SIM_ANCHORS.r0 * np.exp(-(SIM_ANCHORS.l_min + offgas * (SIM_ANCHORS.l_max - SIM_ANCHORS.l_min)))
 
-    metal_rate = _METAL_TRUE_RATE.get(class_name, 0.03)
+    metal_rate = _METAL_TRUE_RATE.get(family, 0.03)
     metal_detected = bool(rng.random() < metal_rate)
     load_g = float(max(1.0, rng.normal(60, 40)))
 

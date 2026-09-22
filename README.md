@@ -61,17 +61,37 @@ classification sources ──ingest──► data/processed/<class>/  ──spli
 | YOLO26 detector training | [src/edgewaste/detect/train.py](src/edgewaste/detect/train.py) |
 | Detect-then-classify pipeline (files + webcam) | [src/edgewaste/pipeline.py](src/edgewaste/pipeline.py) |
 
-## Two-level taxonomy: object identity × material
+## Taxonomy: 33 item classes × 9 material families × 18 detected objects
 
-The system predicts at two levels from two independent models, then
+The system predicts at multiple levels from independent models, then
 cross-checks them against each other:
 
 | Level | Model | Classes |
 |---|---|---|
-| **What object is it?** | YOLO26n detector (TACO, 18 classes) | Aluminium foil, Bottle cap, Bottle, Broken glass, Can, Carton, Cigarette, Cup, Lid, Other litter, Other plastic, Paper, Plastic bag-wrapper, Plastic container, Pop tab, Straw, Styrofoam piece, Unlabeled litter |
-| **What is it made of?** | ConvNeXt+ViT hybrid classifier | cardboard, paper, plastic, glass, metal, organic, other |
+| **What object is it?** | YOLO26n detector (TACO) | **18**: Aluminium foil, Bottle cap, Bottle, Broken glass, Can, Carton, Cigarette, Cup, Lid, Other litter, Other plastic, Paper, Plastic bag-wrapper, Plastic container, Pop tab, Straw, Styrofoam piece, Unlabeled litter |
+| **Which item is it?** | ConvNeXt+ViT hybrid classifier | **33**: 9 plastic · 4 paper · 2 cardboard · 3 glass · 4 metal · 4 organic · 2 styrofoam · 2 textile · 3 hazardous |
+| **Which stream does it go to?** | derived from the item class | **9 families**: plastic, paper, cardboard, glass, metal, organic, styrofoam, textile, hazardous |
 | **How contaminated is it?** | OCI (moisture + gas sensor fusion) | continuous 0–1 score |
 | **How sure are we?** | MC-Dropout | normalised predictive entropy |
+
+Run `python -m edgewaste.taxonomy` for the full class list.
+
+**Why fine-grained plus a hierarchy.** A flat "plastic/glass/metal" label is
+not what a sorting facility acts on: a PET drinks bottle, a detergent bottle
+and a carrier bag are all "plastic" but go to different processes, while a
+polystyrene cup is processed with none of them. So the classifier predicts
+the *item* and the family is derived from it, and `edgewaste-eval` reports
+**both**: item accuracy measures recognition, family accuracy measures
+whether the item would be *routed* correctly. Confusing
+`plastic_water_bottles` with `plastic_soda_bottles` is an item-level error
+but a routing success — splitting the metric makes that visible rather than
+hiding it behind one number.
+
+**Hazardous streams** (battery, e-waste, medical) are separated at the
+taxonomy level and routed on class alone, before any confidence or
+contamination logic — a missed battery is a fire, so it must not be
+averaged away into a macro F1. `edgewaste-eval` reports hazardous recall
+separately for the same reason.
 
 The **Object-Identity Prior** ([identity_prior.py](src/edgewaste/identity_prior.py))
 couples the first two: a crop the detector confidently calls a `Can` has its
