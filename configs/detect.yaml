@@ -13,4 +13,4 @@ detect:
   epochs: 60
   batch_size: 16
   output_dir: runs/detect
-  conf_threshold: 0.35
+  conf_threshold: 0.5

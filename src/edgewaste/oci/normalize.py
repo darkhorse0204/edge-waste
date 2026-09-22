@@ -1,13 +1,9 @@
-"""Fixed-reference feature scaling for the two OCI sensor channels.
+"""Fixed-reference normalization for the moisture and gas channels.
 
-Deliberately NOT min-max over live data: a single outlier reading would
-silently redefine the whole scale mid-deployment. Anchors are frozen
-per-unit constants from a one-time calibration (clean-air R0, dry/wet
-moisture extremes), not something the running system ever updates itself.
-
-The gas channel works directly in Rs/R0 log-space rather than fitting the
-MQ-135 datasheet's ppm curve, so the model doesn't stack the datasheet's
-approximation error on top of its own.
+Per the OCI protocol doc, Part 1: NOT running min-max over live data (fragile
+to a single outlier redefining the scale) and NOT a datasheet ppm curve-fit
+for gas (extra approximation error). Both anchors are measured once, offline,
+during calibration, then hard-coded as constants for deployment.
 """
 
 from __future__ import annotations
@@ -18,31 +14,32 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class CalibrationAnchors:
-    """Per-unit calibration constants, fixed at setup time."""
-
-    m_dry: float  # moisture sensor raw reading in bone-dry air
-    m_wet: float  # moisture sensor raw reading fully saturated
-    r0: float  # MQ-135 sensor resistance in clean air, post burn-in
-    l_min: float  # g_signal floor observed during calibration (clean air)
-    l_max: float  # g_signal ceiling observed during calibration (max contamination)
+    """One-time calibration constants for a specific physical sensor pair.
+    Measure these per the OCI protocol doc Part 4.2 (fixed dry/wet, clean-air/
+    saturated reference readings) — do not recompute at runtime."""
+    m_dry: float    # moisture_raw on a genuinely dry reference item
+    m_wet: float    # moisture_raw on a genuinely saturated reference item
+    r0: float       # MQ-135 clean-air baseline resistance (per-unit, mandatory)
+    l_min: float    # -log(Rs/R0) in clean air
+    l_max: float    # -log(Rs/R0) near a heavily contaminated reference
 
 
 def normalize_moisture(moisture_raw: float, anchors: CalibrationAnchors) -> float:
-    """f_m = clip((moisture_raw - m_dry) / (m_wet - m_dry), 0, 1)."""
     span = anchors.m_wet - anchors.m_dry
     if span == 0:
-        raise ValueError("Degenerate moisture anchors: m_wet == m_dry.")
+        raise ValueError("m_wet == m_dry — calibration anchors invalid.")
     f_m = (moisture_raw - anchors.m_dry) / span
-    return min(1.0, max(0.0, f_m))
+    return max(0.0, min(1.0, f_m))
 
 
 def normalize_gas(rs: float, anchors: CalibrationAnchors) -> float:
-    """f_g = clip((-log(Rs/R0) - l_min) / (l_max - l_min), 0, 1)."""
+    """rs: sensor resistance computed from the raw ADC reading, per the
+    R0-calibration formula in Master-Work-Plan.md Sub-Phase 1.2, step 8."""
     if rs <= 0 or anchors.r0 <= 0:
-        raise ValueError("Rs and R0 must be positive (sensor resistance readings).")
+        raise ValueError("Rs and R0 must be positive — check sensor wiring/calibration.")
     g_signal = -math.log(rs / anchors.r0)
     span = anchors.l_max - anchors.l_min
     if span == 0:
-        raise ValueError("Degenerate gas anchors: l_max == l_min.")
+        raise ValueError("l_max == l_min — calibration anchors invalid.")
     f_g = (g_signal - anchors.l_min) / span
-    return min(1.0, max(0.0, f_g))
+    return max(0.0, min(1.0, f_g))

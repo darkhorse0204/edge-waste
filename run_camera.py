@@ -1,55 +1,49 @@
-"""One-command live-camera launcher for the full pipeline.
-
-Pre-flight-checks that the detector and classifier checkpoints exist (exits
-with a clear message naming whichever is missing instead of a deep
-traceback), stamps a timestamped session directory under runs/logs/, and
-runs edgewaste.pipeline in camera mode logging every detection to it.
-
-Usage:
-    python run_camera.py
-    python run_camera.py --det-ckpt runs/detect/taco_single_class/weights/best.pt \
-        --cls-ckpt runs/stage1/best.pt
+"""
+run_camera.py — one-command launcher for the edge-waste live camera demo.
+Each run gets its own session folder under runs/logs/<timestamp>/,
+containing both the prediction CSV and that session's Grad-CAM explanations.
 """
 
-from __future__ import annotations
-
-import argparse
-import datetime as dt
+import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+project = Path(__file__).resolve().parent
 
-from edgewaste.config import Config  # noqa: E402
-from edgewaste.pipeline import run_camera  # noqa: E402
+detector = project / "runs" / "detect" / "taco_single_class" / "weights" / "best.pt"
+classifier = project / "runs" / "stage1" / "best.pt"
+config = project / "configs" / "stage1.yaml"
 
+session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+session_dir = project / "runs" / "logs" / session_id
+log_csv = session_dir / "predictions.csv"
+explain_dir = session_dir / "explanations"
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="Live-camera session launcher.")
-    ap.add_argument("--config", default="configs/stage1.yaml")
-    ap.add_argument("--det-ckpt", default="runs/detect/taco_single_class/weights/best.pt")
-    ap.add_argument("--cls-ckpt", default="runs/stage1/best.pt")
-    ap.add_argument("--cam-index", type=int, default=0)
-    ap.add_argument("--logs-root", default="runs/logs")
-    args = ap.parse_args()
+for path, label in [(detector, "detector checkpoint"),
+                     (classifier, "classifier checkpoint"),
+                     (config, "config file")]:
+    if not path.exists():
+        print(f"ERROR: {label} not found at: {path}")
+        sys.exit(1)
 
-    missing = [p for p in (args.config, args.det_ckpt, args.cls_ckpt) if not Path(p).exists()]
-    if missing:
-        print("Cannot start — missing required file(s):")
-        for m in missing:
-            print(f"  - {m}")
-        print("\nTrain the classifier/detector first (see README.md), or point "
-              "--det-ckpt/--cls-ckpt at existing checkpoints.")
-        return 1
+cmd = [
+    sys.executable,
+    "-m",
+    "edgewaste.pipeline",
+    "--config",
+    str(config),
+    "--det-ckpt",
+    str(detector),
+    "--cls-ckpt",
+    str(classifier),
+    "--camera",
+    "--log-csv",
+    str(log_csv),
+    "--explain-dir",
+    str(explain_dir),
+]
 
-    session_dir = Path(args.logs_root) / dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    session_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Session directory: {session_dir}")
-
-    cfg = Config.load(args.config)
-    run_camera(cfg, args.det_ckpt, args.cls_ckpt, args.cam_index, log_dir=str(session_dir))
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+print(f"Launching edge-waste camera pipeline... (session: {session_id})")
+result = subprocess.run(cmd)
+sys.exit(result.returncode)

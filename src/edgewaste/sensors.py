@@ -72,3 +72,32 @@ def simulate_sensors(
 
     return SensorReading(moisture_raw=moisture_raw, rs=float(rs),
                           metal_detected=metal_detected, load_g=load_g)
+
+
+def fit_demo_oci_model():
+    """Fit an OCI model on synthetic calibration data, for demo use.
+
+    The fitted model consumes f_m/f_g already normalised to [0, 1], so the
+    calibration data and the live readings may sit on different raw scales
+    as long as each is normalised with its own matching anchors — the
+    calibration set uses the anchors its generator returns, live readings
+    use SIM_ANCHORS above. Replace the generator with a real
+    calibration_data.csv load and nothing else changes.
+    """
+    from .oci import fit_oci_weights, normalize_gas, normalize_moisture
+    from .oci.synthetic import generate_synthetic_calibration_data
+
+    df, anchors = generate_synthetic_calibration_data()
+    f_m = df["moisture_raw"].apply(lambda v: normalize_moisture(v, anchors)).to_numpy()
+    f_g = df["rs_over_r0"].apply(lambda v: normalize_gas(v, anchors)).to_numpy()
+    y = df["contaminated"].to_numpy()
+    model, _ = fit_oci_weights(f_m, f_g, y)
+    return model
+
+
+def reading_to_features(reading: SensorReading) -> tuple[float, float]:
+    """Normalise a simulated reading into the (f_m, f_g) the OCI model takes."""
+    from .oci import normalize_gas, normalize_moisture
+
+    return (normalize_moisture(reading.moisture_raw, SIM_ANCHORS),
+            normalize_gas(reading.rs, SIM_ANCHORS))

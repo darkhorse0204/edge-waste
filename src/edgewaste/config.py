@@ -66,7 +66,87 @@ class DetectConfig:
     epochs: int = 60
     batch_size: int = 16
     output_dir: str = "runs/detect"
-    conf_threshold: float = 0.35  # inference-time detection confidence gate
+    # Inference-time detection gate. Raised from 0.35 to 0.45: the live camera
+    # launchers pass configs/stage1.yaml, which has no `detect:` section, so
+    # this default — not detect.yaml's value — is what the demo actually used.
+    # Weak boxes are the ones with sloppy edges, and a sloppy box means a
+    # sloppy crop and an unstable prediction.
+    conf_threshold: float = 0.45
+
+
+@dataclass
+class InferenceConfig:
+    """Live-demo behaviour. Affects nothing about training or the checkpoints —
+    every field here is applied after the models have already spoken."""
+
+    # --- confidence gate -------------------------------------------------
+    # Smoothed probability below this displays `unknown_label` instead of a
+    # class. Raise toward 0.7 for a stricter demo, lower to 0.5 if too much
+    # reads as unknown.
+    cls_conf_threshold: float = 0.60
+    unknown_label: str = "unknown"
+
+    # --- crop --------------------------------------------------------------
+    # Fraction added to each side of the detector box before cropping.
+    pad_frac: float = 0.15
+    # Drop boxes sitting >80% inside a bigger box (bottle-cap-inside-bottle).
+    containment_thresh: float = 0.80
+
+    # --- temporal smoothing ------------------------------------------------
+    # "mean" = average softmax over the window, "vote" = majority argmax,
+    # "none" = per-frame prediction (the old behaviour).
+    smoothing: str = "mean"
+    history: int = 10  # frames remembered per tracked object
+    switch_margin: float = 0.05  # hysteresis before the label may change
+    iou_match: float = 0.30  # box overlap that counts as "same object"
+    max_age: int = 5  # frames a track survives a detector dropout
+
+    # --- display -----------------------------------------------------------
+    colour_high: float = 0.80  # >= this -> green
+    colour_mid: float = 0.60  # >= this -> yellow, below -> red
+    show_hud: bool = True
+
+
+@dataclass
+class ExplainConfig:
+    """Live Grad-CAM second window. Inference-side only."""
+
+    # Start with the window open. Toggle at runtime with 'g'.
+    enabled: bool = False
+    # Frames between recomputes. Measured cost is ~88 ms per Grad-CAM against
+    # ~30 ms for a classification, so every frame would roughly halve the frame
+    # rate. At 10 the average cost is ~9 ms/frame — visually free. Lower it for
+    # a more responsive heatmap, raise it if the demo machine is slower.
+    interval: int = 10
+    # Heatmap share of the blend: 0 = original crop, 1 = pure heatmap.
+    alpha: float = 0.5
+    # Side length of each of the two tiles in the panel, in pixels.
+    tile: int = 300
+
+
+@dataclass
+class RecognizeConfig:
+    """COCO object-identity stage (see recognize.py). Pretrained, never trained
+    here — it only supplies a prior over the material classifier's output."""
+
+    enabled: bool = True
+    # COCO-pretrained weights. yolo26n.pt is the same base checkpoint the TACO
+    # detector was fine-tuned from, so no new architecture enters the project.
+    model: str = "yolo26n.pt"
+    # 0.50, not COCO's usual 0.25: a *wrong* identity can drag a correct
+    # material prediction down (a glass jar mislabelled "book" at 48% pulls
+    # toward paper). Testing on real data showed 0.50 drops the false IDs
+    # while keeping the true ones, which sat at 0.60-0.90.
+    conf_threshold: float = 0.50
+    # IoU at which a COCO box is considered the same object as a waste box.
+    iou_match: float = 0.45
+    # Add confidently-recognised waste objects the TACO detector missed. This
+    # is what lets a clean banana or pair of scissors be found at all — TACO is
+    # trained on street litter and often doesn't localise tidy objects.
+    add_unmatched: bool = True
+    # Mass placed on the implied class for a "certain" mapping, scaled by the
+    # recogniser's own confidence. <1.0 so a shaky identity stays recoverable.
+    certainty: float = 0.95
 
 
 @dataclass
@@ -75,6 +155,9 @@ class Config:
     model: ModelConfig = field(default_factory=ModelConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
     detect: DetectConfig = field(default_factory=DetectConfig)
+    infer: InferenceConfig = field(default_factory=InferenceConfig)
+    recognize: RecognizeConfig = field(default_factory=RecognizeConfig)
+    explain: ExplainConfig = field(default_factory=ExplainConfig)
 
     @staticmethod
     def load(path: str | Path | None) -> "Config":
@@ -90,6 +173,13 @@ class Config:
             cfg.train = TrainConfig(**{**asdict(cfg.train), **raw["train"]})
         if "detect" in raw:
             cfg.detect = DetectConfig(**{**asdict(cfg.detect), **raw["detect"]})
+        if "infer" in raw:
+            cfg.infer = InferenceConfig(**{**asdict(cfg.infer), **raw["infer"]})
+        if "recognize" in raw:
+            cfg.recognize = RecognizeConfig(
+                **{**asdict(cfg.recognize), **raw["recognize"]})
+        if "explain" in raw:
+            cfg.explain = ExplainConfig(**{**asdict(cfg.explain), **raw["explain"]})
         return cfg
 
     def to_dict(self) -> dict[str, Any]:

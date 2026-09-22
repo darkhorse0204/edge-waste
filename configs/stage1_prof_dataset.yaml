@@ -1,0 +1,71 @@
+# Stage 1 configuration — camera-only ConvNeXt + ViT hybrid classifier.
+# Override any subset of fields; unspecified fields fall back to the dataclass
+# defaults in src/edgewaste/config.py.
+
+data:
+  processed_dir: D:/VIT/7 8 Semester/PROJECT 1/NEW DATASET/waste-7class
+  downloads_dir: data/downloads
+  manifest: data/splits_prof.csv
+  val_fraction: 0.15
+  test_fraction: 0.15
+  seed: 42
+
+model:
+  # Backbones sized to fit a 4GB GPU. Bump to convnext_small / vit_base_patch16_224
+  # once on stronger hardware (the blueprint's nominal ConvNeXt + ViT-B pairing).
+  convnext: convnext_tiny
+  vit: vit_small_patch16_224
+  image_size: 224
+  fusion_dim: 512
+  dropout: 0.2
+  pretrained: false
+
+train:
+  epochs: 20
+  batch_size: 32
+  lr: 0.0003
+  weight_decay: 0.05
+  warmup_epochs: 1
+  label_smoothing: 0.1
+  num_workers: 4
+  amp: true
+  use_class_weights: true
+  grad_clip: 1.0
+  output_dir: runs/stage1_prof_dataset
+  early_stop_patience: 5
+
+detect:
+  conf_threshold: 0.45
+
+# This classifier is the under-trained one (49% val acc, trained with
+# pretrained: false). Its live confidences average 0.47-0.55, so the standard
+# 0.60 gate would report "unknown" almost every frame. The gate is lowered and
+# the window lengthened to keep the demo legible — but that is cosmetic. The
+# real fix is retraining with pretrained: true; then use the 0.60 gate.
+infer:
+  cls_conf_threshold: 0.45
+  pad_frac: 0.15
+  smoothing: mean
+  history: 15                # longer window — noisier model needs more evidence
+  switch_margin: 0.07        # and a wider margin before switching labels
+  iou_match: 0.30
+  max_age: 5
+  colour_high: 0.70          # lowered to match this model's confidence range
+  colour_mid: 0.50
+  show_hud: true
+
+recognize:
+  enabled: true
+  model: yolo26n.pt
+  conf_threshold: 0.50
+  iou_match: 0.45
+  add_unmatched: true
+  # This classifier is the weak one, so lean harder on object identity when
+  # it is available — it is more reliable than the 49%-accuracy material head.
+  certainty: 0.98
+
+explain:
+  enabled: false
+  interval: 10
+  alpha: 0.5
+  tile: 300

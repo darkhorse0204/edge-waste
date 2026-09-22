@@ -43,9 +43,7 @@ from .decision import decide
 from .identity_prior import apply_identity_prior, explain as explain_prior, is_consistent
 from .infer import load_for_inference
 from .oci import compute_oci
-from .oci.normalize import normalize_gas, normalize_moisture
-from .oci.synthetic import DEFAULT_ANCHORS
-from .sensors import simulate_sensors
+from .sensors import fit_demo_oci_model, reading_to_features, simulate_sensors
 from .utils import pick_device
 
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
@@ -115,9 +113,8 @@ def _classify_track_crops(tracks: dict[int, Track], classifier, tfm, class_names
 
         if oci_model is not None:
             reading = simulate_sensors(track.material, rng=rng)
-            f_m = normalize_moisture(reading.moisture_raw, DEFAULT_ANCHORS)
-            f_g = normalize_gas(reading.rs, DEFAULT_ANCHORS)
-            track.oci_score = compute_oci(oci_model, f_m=f_m, f_g=f_g)
+            f_m, f_g = reading_to_features(reading)
+            track.oci_score = compute_oci(oci_model, f_m, f_g)
 
         decision = decide(track.material, track.material_conf, track.uncertainty,
                            track.oci_score)
@@ -140,8 +137,7 @@ def run_video(
     conf = conf_threshold if conf_threshold is not None else cfg.detect.conf_threshold
     rng = np.random.default_rng(cfg.data.seed)
 
-    from .pipeline import _fit_demo_oci_model
-    oci_model = _fit_demo_oci_model()
+    oci_model = fit_demo_oci_model()
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
