@@ -61,6 +61,50 @@ classification sources ──ingest──► data/processed/<class>/  ──spli
 | YOLO26 detector training | [src/edgewaste/detect/train.py](src/edgewaste/detect/train.py) |
 | Detect-then-classify pipeline (files + webcam) | [src/edgewaste/pipeline.py](src/edgewaste/pipeline.py) |
 
+## Two-level taxonomy: object identity × material
+
+The system predicts at two levels from two independent models, then
+cross-checks them against each other:
+
+| Level | Model | Classes |
+|---|---|---|
+| **What object is it?** | YOLO26n detector (TACO, 18 classes) | Aluminium foil, Bottle cap, Bottle, Broken glass, Can, Carton, Cigarette, Cup, Lid, Other litter, Other plastic, Paper, Plastic bag-wrapper, Plastic container, Pop tab, Straw, Styrofoam piece, Unlabeled litter |
+| **What is it made of?** | ConvNeXt+ViT hybrid classifier | cardboard, paper, plastic, glass, metal, organic, other |
+| **How contaminated is it?** | OCI (moisture + gas sensor fusion) | continuous 0–1 score |
+| **How sure are we?** | MC-Dropout | normalised predictive entropy |
+
+The **Object-Identity Prior** ([identity_prior.py](src/edgewaste/identity_prior.py))
+couples the first two: a crop the detector confidently calls a `Can` has its
+material distribution re-weighted toward `metal`. The prior is *soft* — a
+confident contradictory reading survives and is flagged rather than
+overwritten, because a system that can never report a mislabelled object is
+worse than the error it prevents. Surviving contradictions route to manual
+review.
+
+## Video survey mode
+
+`edgewaste-video` processes video footage of multi-item scenes (a beach
+survey walk, a conveyor run, a drone pass) and produces a **de-duplicated
+litter inventory**.
+
+Counting — not detection — is the hard part: one physical item spans
+hundreds of frames, so naive per-frame summing overcounts by orders of
+magnitude. Each detection carries a persistent ByteTrack ID and the
+inventory aggregates **per track**, so one physical item yields exactly one
+row. Per track: confidence-weighted majority vote over object class,
+material classified once on the largest (closest) crop, MC-Dropout
+uncertainty, OCI score, and routing decision.
+
+```bash
+edgewaste-video --source beach_survey.mp4 \
+    --det-ckpt runs/detect/taco_multiclass/weights/best.pt \
+    --cls-ckpt runs/stage1/best.pt
+```
+
+Outputs `annotated.mp4`, `tracks.csv` (one row per physical item) and
+`inventory.txt` (counts by object type, material and routing decision, plus
+any object/material contradictions).
+
 ## What's built (Stage 2/3, hardware simulated)
 
 | Module | File | Simulated? |

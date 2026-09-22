@@ -40,6 +40,7 @@ from PIL import Image
 from .config import Config
 from .confidence import mc_dropout_predict
 from .decision import decide
+from .identity_prior import apply_identity_prior, explain as explain_prior, is_consistent
 from .infer import load_for_inference
 from .oci import compute_oci
 from .oci.normalize import normalize_gas, normalize_moisture
@@ -64,6 +65,9 @@ class Track:
     best_crop: Image.Image | None = None
     material: str = ""
     material_conf: float = 0.0
+    material_raw: str = ""  # classifier's own call, before the identity prior
+    prior_corrected: bool = False
+    consistent: bool = True
     uncertainty: float = float("nan")
     oci_score: float | None = None
     route: str = ""
@@ -96,9 +100,17 @@ def _classify_track_crops(tracks: dict[int, Track], classifier, tfm, class_names
             continue
         x = tfm(track.best_crop).unsqueeze(0).to(device)
         mean_probs, uncertainty = mc_dropout_predict(classifier, x, n_passes=mc_passes)
-        conf, idx = mean_probs[0].max(0)
+        raw_idx = int(mean_probs[0].argmax())
+        track.material_raw = class_names[raw_idx]
+
+        # Cross-validate the classifier against what the detector says the
+        # object *is* — see identity_prior.py.
+        adjusted = apply_identity_prior(mean_probs[0], track.object_class, class_names)
+        conf, idx = adjusted.max(0)
         track.material = class_names[int(idx)]
         track.material_conf = float(conf)
+        track.prior_corrected = track.material != track.material_raw
+        track.consistent = is_consistent(track.object_class, track.material)
         track.uncertainty = float(uncertainty[0])
 
         if oci_model is not None:
@@ -109,7 +121,9 @@ def _classify_track_crops(tracks: dict[int, Track], classifier, tfm, class_names
 
         decision = decide(track.material, track.material_conf, track.uncertainty,
                            track.oci_score)
-        track.route = decision.route
+        # A surviving object/material contradiction means one of the two
+        # stages is wrong on this item; don't sort it on a coin flip.
+        track.route = "manual_review" if not track.consistent else decision.route
 
 
 def run_video(
@@ -213,11 +227,13 @@ def _write_reports(tracks: dict[int, Track], out: Path, source: str, n_frames: i
     with open(rows_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["track_id", "object_class", "object_conf", "material",
+                          "material_raw", "prior_corrected", "consistent",
                           "material_conf", "uncertainty", "oci_score", "route",
                           "first_frame", "last_frame", "frames_visible"])
         for t in sorted(tracks.values(), key=lambda t: t.first_frame):
             writer.writerow([
                 t.track_id, t.object_class, f"{t.object_conf:.3f}", t.material,
+                t.material_raw, int(t.prior_corrected), int(t.consistent),
                 f"{t.material_conf:.3f}", f"{t.uncertainty:.3f}",
                 "" if t.oci_score is None else f"{t.oci_score:.3f}",
                 t.route, t.first_frame, t.last_frame, t.n_frames,
@@ -227,6 +243,8 @@ def _write_reports(tracks: dict[int, Track], out: Path, source: str, n_frames: i
     by_material: dict[str, int] = defaultdict(int)
     by_route: dict[str, int] = defaultdict(int)
     contaminated = 0
+    corrected = 0
+    contradictions: list[str] = []
     for t in tracks.values():
         by_object[t.object_class] += 1
         if t.material:
@@ -235,6 +253,11 @@ def _write_reports(tracks: dict[int, Track], out: Path, source: str, n_frames: i
             by_route[t.route] += 1
         if t.oci_score is not None and t.oci_score >= 0.5:
             contaminated += 1
+        if t.prior_corrected:
+            corrected += 1
+        if t.material and not t.consistent:
+            contradictions.append(f"  #{t.track_id:<5} "
+                                   + explain_prior(t.object_class, t.material))
 
     lines = [
         "LITTER INVENTORY REPORT",
@@ -244,6 +267,8 @@ def _write_reports(tracks: dict[int, Track], out: Path, source: str, n_frames: i
         f"Frames processed : {n_frames}",
         f"Unique items     : {len(tracks)}   (de-duplicated across frames by track ID)",
         f"Flagged contaminated (OCI >= 0.50): {contaminated}",
+        f"Material corrected by identity prior: {corrected}",
+        f"Unresolved object/material contradictions: {len(contradictions)}",
         "",
         "BY OBJECT TYPE",
         "-" * 46,
@@ -256,6 +281,9 @@ def _write_reports(tracks: dict[int, Track], out: Path, source: str, n_frames: i
     lines += ["", "BY ROUTING DECISION", "-" * 46]
     for name, n in sorted(by_route.items(), key=lambda kv: -kv[1]):
         lines.append(f"  {name:<28} {n:>5}")
+    if contradictions:
+        lines += ["", "OBJECT/MATERIAL CONTRADICTIONS (routed to manual review)", "-" * 46]
+        lines += contradictions
 
     report = "\n".join(lines)
     (out / "inventory.txt").write_text(report, encoding="utf-8")
