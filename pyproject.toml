@@ -47,6 +47,7 @@ edgewaste-detect-train = "edgewaste.detect.train:main"
 edgewaste-pipeline = "edgewaste.pipeline:main"
 edgewaste-federated = "edgewaste.federated.simulate:main"
 edgewaste-export = "edgewaste.export_onnx:main"
+edgewaste-video = "edgewaste.video:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
