@@ -292,7 +292,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Video litter survey with tracking + inventory.")
     ap.add_argument("--config", default="configs/stage1.yaml")
     ap.add_argument("--source", required=True, help="Video file path (or a camera index).")
-    ap.add_argument("--det-ckpt", default="runs/detect/taco_multiclass/weights/best.pt")
+    # Ultralytics nests project/ under its own runs_dir, hence the doubled path.
+    ap.add_argument("--det-ckpt",
+                     default="runs/detect/runs/detect/taco_multiclass/weights/best.pt")
     ap.add_argument("--cls-ckpt", default="runs/stage1/best.pt")
     ap.add_argument("--out-dir", default=None, help="Defaults to runs/video/<timestamp>.")
     ap.add_argument("--conf", type=float, default=None)
