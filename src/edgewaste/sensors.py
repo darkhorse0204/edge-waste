@@ -31,9 +31,10 @@ SIM_ANCHORS = CalibrationAnchors(m_dry=200.0, m_wet=800.0, r0=10_000.0, l_min=0.
 # cardboard) is possible and gives OCI something to catch.
 _BASE_WETNESS = {
     "organic": 0.85, "cardboard": 0.15, "paper": 0.15, "plastic": 0.10,
-    "glass": 0.05, "metal": 0.05, "other": 0.20,
+    "glass": 0.05, "metal": 0.05, "textile": 0.20, "battery": 0.05,
+    "e_waste": 0.05, "medical": 0.30, "other": 0.20,
 }
-_METAL_TRUE_RATE = {"metal": 0.95, "other": 0.05}
+_METAL_TRUE_RATE = {"metal": 0.95, "battery": 0.80, "e_waste": 0.70, "other": 0.05}
 
 
 @dataclass

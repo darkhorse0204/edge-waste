@@ -32,16 +32,35 @@ class WasteClass:
 # organic, other/reject" list).
 # ---------------------------------------------------------------------------
 CLASSES: tuple[WasteClass, ...] = (
+    # --- core recyclable material streams ---
     WasteClass("cardboard", "Cardboard"),
     WasteClass("paper", "Paper"),
     WasteClass("plastic", "Plastic"),
     WasteClass("glass", "Glass"),
     WasteClass("metal", "Metal"),
-    WasteClass("organic", "Organic"),
+    # --- compostable ---
+    WasteClass("organic", "Organic / Biological",
+               note="food and garden waste; the stream the OCI contamination "
+                    "index is about"),
+    # --- separately-collected streams ---
+    WasteClass("textile", "Textile",
+               note="clothes and shoes: a distinct recycling stream, not "
+                    "general trash"),
+    # --- hazardous: must never enter a recycling or compost stream ---
+    WasteClass("battery", "Battery (hazardous)",
+               note="fire risk in collection vehicles and sorting plants; "
+                    "requires dedicated collection"),
+    WasteClass("e_waste", "E-Waste (hazardous)",
+               note="WEEE: heavy metals and recoverable rare earths; "
+                    "regulated disposal"),
+    WasteClass("medical", "Medical (hazardous)",
+               note="sharps/biohazard risk; requires incineration or "
+                    "specialised treatment"),
+    # --- genuine catch-all, now much smaller ---
     WasteClass("other", "Other / Non-recyclable",
-               note="catch-all: general trash, e-waste, textiles, medical, "
-                    "battery, and anything else outside the six core "
-                    "material classes"),
+               note="general residual trash only - the hazardous, textile and "
+                    "organic streams that used to be pooled here are now "
+                    "their own classes"),
 )
 
 # Ordered canonical class names — this order defines the classifier head indices.
@@ -113,8 +132,11 @@ TRASHBOX = DataSource(
         "metal": "metal",
         "paper": "paper",
         "plastic": "plastic",
-        "e-waste": "other",
-        "medical": "other",
+        # Kept as their own hazardous classes rather than pooled into
+        # 'other' — a sorter that cannot tell a syringe from a crisp packet
+        # is not deployable.
+        "e-waste": "e_waste",
+        "medical": "medical",
     },
     note="~14.3k in-the-wild/web-sourced images across 7 classes; fills "
          "TrashNet's diversity gap per the tech-stack doc's combination "
@@ -133,12 +155,15 @@ GARBAGE_12 = DataSource(
         "biological": "organic",
         "metal": "metal",
         "plastic": "plastic",
+        # Colour is merged: only this source labels glass by colour, so
+        # keeping green/brown/white apart would make the class depend on
+        # which dataset an image came from rather than on the glass itself.
         "green-glass": "glass",
         "brown-glass": "glass",
         "white-glass": "glass",
-        "clothes": "other",
-        "shoes": "other",
-        "battery": "other",
+        "clothes": "textile",
+        "shoes": "textile",
+        "battery": "battery",
         "trash": "other",
     },
     note="Primary source for 'organic' (its 'biological' folder) — neither "

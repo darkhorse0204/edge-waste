@@ -61,6 +61,14 @@ OBJECT_MATERIAL_PRIOR: dict[str, set[str]] = {
     "Unlabeled litter": set(),
 }
 
+# The detector is trained on outdoor litter and has no object class for the
+# hazardous or textile streams. It will therefore label a battery or a
+# syringe as 'Other litter'/'Unlabeled litter' — both uninformative, so the
+# prior stays uniform and the classifier's hazardous call survives untouched.
+# This is deliberate: the prior must never be able to talk the classifier
+# *out of* flagging a hazard.
+HAZARD_SAFE_MATERIALS = frozenset({"battery", "e_waste", "medical"})
+
 
 def prior_vector(object_class: str, class_names: list[str] | tuple[str, ...] = CLASS_NAMES
                   ) -> torch.Tensor:
@@ -69,7 +77,11 @@ def prior_vector(object_class: str, class_names: list[str] | tuple[str, ...] = C
     if not plausible:  # unknown object, or an uninformative catch-all
         return torch.ones(len(class_names))
     return torch.tensor([
-        1.0 if name in plausible else IMPLAUSIBLE_WEIGHT for name in class_names
+        # Hazardous materials are never down-weighted: the prior may not
+        # suppress a hazard flag (see HAZARD_SAFE_MATERIALS).
+        1.0 if (name in plausible or name in HAZARD_SAFE_MATERIALS)
+        else IMPLAUSIBLE_WEIGHT
+        for name in class_names
     ])
 
 
@@ -91,6 +103,8 @@ def is_consistent(object_class: str, material: str) -> bool:
     plausible = OBJECT_MATERIAL_PRIOR.get(object_class)
     if not plausible:
         return True  # uninformative object identity can't contradict anything
+    if material in HAZARD_SAFE_MATERIALS:
+        return True  # a hazard call is never treated as a contradiction
     return material in plausible
 
 
@@ -99,6 +113,9 @@ def explain(object_class: str, material: str) -> str:
     plausible = OBJECT_MATERIAL_PRIOR.get(object_class)
     if not plausible:
         return f"'{object_class}' implies no material constraint"
+    if material in HAZARD_SAFE_MATERIALS:
+        return (f"hazard call '{material}' kept over object identity "
+                f"'{object_class}' - hazard flags are never overridden")
     if material in plausible:
         return f"'{material}' is consistent with '{object_class}'"
     return (f"CONTRADICTION: '{object_class}' implies "

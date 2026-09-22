@@ -18,6 +18,12 @@ from .taxonomy import CLASS_NAMES
 GATE_INDEX: dict[str, int] = {name: i for i, name in enumerate(CLASS_NAMES)}
 GATE_MANUAL_REVIEW = len(CLASS_NAMES)
 GATE_CONTAMINATED_REJECT = len(CLASS_NAMES) + 1
+GATE_HAZARDOUS = len(CLASS_NAMES) + 2
+
+# Streams that must never reach a recycling or compost gate: a battery in a
+# paper bale is a fire, a syringe in a sorting line is an injury. These are
+# routed on class alone, before any contamination or confidence logic.
+HAZARDOUS_CLASSES = frozenset({"battery", "e_waste", "medical"})
 
 UNCERTAINTY_REVIEW_THRESHOLD = 0.5  # normalised predictive entropy
 OCI_CONTAMINATION_THRESHOLD = 0.5  # sigmoid score; overridden by select_threshold() when calibrated
@@ -43,7 +49,18 @@ def decide(
     is checked by a human before an OCI-contaminated but confidently-typed
     recyclable is rejected, since a misrouted "unsure" item is more costly
     than a conservative contamination reject.
+
+    Hazard outranks both. A suspected battery, e-waste or medical item goes
+    to the hazardous gate even when the model is unsure, because the cost of
+    a missed hazard (fire, injury) is far above the cost of a human checking
+    a false alarm.
     """
+    if class_name in HAZARDOUS_CLASSES:
+        return Decision(class_name, cls_conf, uncertainty, oci_score,
+                         route="hazardous", gate=GATE_HAZARDOUS,
+                         reason=f"'{class_name}' is a hazardous stream - "
+                                f"never routed to recycling or compost")
+
     if uncertainty >= uncertainty_threshold:
         return Decision(class_name, cls_conf, uncertainty, oci_score,
                          route="manual_review", gate=GATE_MANUAL_REVIEW,
