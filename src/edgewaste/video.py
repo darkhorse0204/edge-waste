@@ -69,6 +69,7 @@ class Track:
     uncertainty: float = float("nan")
     oci_score: float | None = None
     route: str = ""
+    hazard_suspected: bool = False
 
     @property
     def object_class(self) -> str:
@@ -121,6 +122,7 @@ def _classify_track_crops(tracks: dict[int, Track], classifier, tfm, class_names
         # A surviving object/material contradiction means one of the two
         # stages is wrong on this item; don't sort it on a coin flip.
         track.route = "manual_review" if not track.consistent else decision.route
+        track.hazard_suspected = decision.hazard_suspected
 
 
 def run_video(
@@ -225,14 +227,15 @@ def _write_reports(tracks: dict[int, Track], out: Path, source: str, n_frames: i
         writer.writerow(["track_id", "object_class", "object_conf", "material",
                           "material_raw", "prior_corrected", "consistent",
                           "material_conf", "uncertainty", "oci_score", "route",
-                          "first_frame", "last_frame", "frames_visible"])
+                          "hazard_suspected", "first_frame", "last_frame", "frames_visible"])
         for t in sorted(tracks.values(), key=lambda t: t.first_frame):
             writer.writerow([
                 t.track_id, t.object_class, f"{t.object_conf:.3f}", t.material,
                 t.material_raw, int(t.prior_corrected), int(t.consistent),
                 f"{t.material_conf:.3f}", f"{t.uncertainty:.3f}",
                 "" if t.oci_score is None else f"{t.oci_score:.3f}",
-                t.route, t.first_frame, t.last_frame, t.n_frames,
+                t.route, int(t.hazard_suspected),
+                t.first_frame, t.last_frame, t.n_frames,
             ])
 
     by_object: dict[str, int] = defaultdict(int)
@@ -240,6 +243,7 @@ def _write_reports(tracks: dict[int, Track], out: Path, source: str, n_frames: i
     by_route: dict[str, int] = defaultdict(int)
     contaminated = 0
     corrected = 0
+    hazard_suspected = 0
     contradictions: list[str] = []
     for t in tracks.values():
         by_object[t.object_class] += 1
@@ -251,6 +255,8 @@ def _write_reports(tracks: dict[int, Track], out: Path, source: str, n_frames: i
             contaminated += 1
         if t.prior_corrected:
             corrected += 1
+        if t.hazard_suspected:
+            hazard_suspected += 1
         if t.material and not t.consistent:
             contradictions.append(f"  #{t.track_id:<5} "
                                    + explain_prior(t.object_class, t.material))
@@ -265,6 +271,7 @@ def _write_reports(tracks: dict[int, Track], out: Path, source: str, n_frames: i
         f"Flagged contaminated (OCI >= 0.50): {contaminated}",
         f"Material corrected by identity prior: {corrected}",
         f"Unresolved object/material contradictions: {len(contradictions)}",
+        f"Hazard-suspected but too uncertain to act on (priority review): {hazard_suspected}",
         "",
         "BY OBJECT TYPE",
         "-" * 46,

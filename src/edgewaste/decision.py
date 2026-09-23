@@ -32,9 +32,10 @@ class Decision:
     cls_conf: float
     uncertainty: float
     oci_score: float | None
-    route: str  # a material family, "manual_review", or "contaminated_reject"
+    route: str  # a material family, "manual_review", "contaminated_reject", or "hazardous"
     gate: int
     reason: str
+    hazard_suspected: bool = False  # classifier named a hazard class, but too unsure to act on it directly
 
 
 def decide(
@@ -47,10 +48,19 @@ def decide(
     recyclable is rejected, since a misrouted "unsure" item is more costly
     than a conservative contamination reject.
 
-    Hazard outranks both. A suspected battery, e-waste or medical item goes
-    to the hazardous gate even when the model is unsure, because the cost of
-    a missed hazard (fire, injury) is far above the cost of a human checking
-    a false alarm.
+    Hazard beats ambiguity, but not blindly. A *confident* battery/e-waste/
+    medical call skips the uncertainty check entirely and gets acted on
+    immediately — the cost of a missed hazard (fire, injury) outweighs the
+    cost of a human checking a false alarm. But when the classifier is both
+    uncertain AND happened to land on a hazard class, that combination is not
+    a confirmed hazard, it is noise that landed on the scariest label by
+    chance — observed directly on out-of-distribution crops, where a
+    low-confidence classifier disproportionately guessed hazard classes and
+    would have fired real hazardous-stream actuation on video frames that
+    were, physically, cardboard and cups. So an uncertain hazard call still
+    never reaches a recycling or compost gate (the one guarantee that must
+    hold unconditionally), but goes to manual review flagged as
+    hazard-suspected rather than being acted on automatically.
 
     Routing is by material *family*, not item class: a water bottle and a
     soda bottle share a chute, so a fine-grained confusion within a family
@@ -60,6 +70,13 @@ def decide(
     family = family_of(class_name)
 
     if is_hazardous(class_name):
+        if uncertainty >= uncertainty_threshold:
+            return Decision(class_name, family, cls_conf, uncertainty, oci_score,
+                             route="manual_review", gate=GATE_MANUAL_REVIEW,
+                             hazard_suspected=True,
+                             reason=f"possible '{class_name}' but uncertainty "
+                                    f"{uncertainty:.2f} >= {uncertainty_threshold:.2f} - "
+                                    f"too unsure to act on automatically, priority human check")
         return Decision(class_name, family, cls_conf, uncertainty, oci_score,
                          route="hazardous", gate=GATE_INDEX["hazardous"],
                          reason=f"'{class_name}' is a hazardous stream - "
@@ -85,8 +102,9 @@ def actuate_conveyor(decision: Decision) -> str:
     """Mock conveyor/servo actuation. Returns the human-readable action log
     line; a real deployment would drive a GPIO servo to gate `decision.gate`
     instead of just logging it."""
+    flag = " [HAZARD SUSPECTED]" if decision.hazard_suspected else ""
     msg = (f"[CONVEYOR] gate={decision.gate:<2} route={decision.route:<20} "
-           f"item={decision.class_name:<28} conf={decision.cls_conf*100:5.1f}%  "
+           f"item={decision.class_name:<28} conf={decision.cls_conf*100:5.1f}%{flag}  "
            f"({decision.reason})")
     print(msg)
     return msg
