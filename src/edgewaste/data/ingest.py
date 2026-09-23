@@ -86,9 +86,24 @@ def _link_or_copy(src: Path, dst: Path) -> None:
         shutil.copy2(src, dst)
 
 
-def _dedupe_name(source_key: str, raw_class: str, path: Path) -> str:
-    """Stable, collision-resistant output filename that keeps provenance."""
-    h = hashlib.md5(str(path).encode("utf-8")).hexdigest()[:10]
+def _dedupe_name(source_key: str, raw_class: str, path: Path, root: Path) -> str:
+    """Stable, collision-resistant output filename that keeps provenance.
+
+    Hashed on the path *relative to the source root*, POSIX-normalised —
+    never the absolute path. An absolute path bakes in the OS separator and
+    the machine's own directory layout, so the exact same downloaded file
+    hashes differently on Windows than on Colab's Linux. Different hash means
+    a different generated filename, which means a different alphabetical
+    sort order in splits.py's `sorted(d.iterdir())`, which means
+    `train_test_split` — same seed, differently-ordered input — assigns the
+    same image to a different split on each machine. A checkpoint trained on
+    one machine then "evaluated" against a locally-rebuilt split leaks train
+    images into test and reports a falsely inflated accuracy. Relative,
+    POSIX-normalised hashing makes the split reproducible across machines,
+    which is what a seeded split is supposed to guarantee in the first place.
+    """
+    rel = path.relative_to(root).as_posix()
+    h = hashlib.md5(rel.encode("utf-8")).hexdigest()[:10]
     return f"{source_key}__{raw_class}__{h}{path.suffix.lower()}"
 
 
@@ -124,7 +139,7 @@ def ingest_source(
             if not _is_readable_image(img):
                 skipped.append(str(img))
                 continue
-            out_name = _dedupe_name(source.key, class_dir.name, img)
+            out_name = _dedupe_name(source.key, class_dir.name, img, root)
             out_path = processed_dir / canonical / out_name
             _link_or_copy(img, out_path)
             writer.writerow([canonical, source.key, class_dir.name,
