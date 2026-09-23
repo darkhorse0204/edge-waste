@@ -64,54 +64,78 @@ class Rule:
 #
 # Anything absent from this table is treated as "recognised but not waste"
 # (person, chair, dog, car, ...) and is dropped rather than force-fitted into
-# one of the seven classes. Add entries freely — it is a plain dict, and the
-# canonical names must match edgewaste.taxonomy.CLASS_NAMES.
+# a class. `Rule.classes` entries must be real edgewaste.taxonomy.CLASS_NAMES
+# — this table is built against the 33-item taxonomy, not the flat 7-class
+# one it originally targeted (see the note below on what changed).
+#
+# The 33-class taxonomy is a fine-grained *packaging-waste* taxonomy (nine
+# item classes are literally can/bottle/jar variants), not a general
+# household-object one, so most COCO objects have no single matching item —
+# a fork is recognisably metal, but none of the four metal classes is
+# "cutlery". Forcing a fictional exact match would be more misleading than
+# admitting the ambiguity, so entries here mostly constrain to a *family*
+# (every item in FAMILY_TO_CLASSES[family]) rather than claim certainty they
+# do not have. `Rule.classes` is genuinely certain only where a family has
+# exactly one item that is the obvious match (a banana is food_waste, not
+# eggshells/coffee_grounds/tea_bags; a cell phone is the taxonomy's only
+# e-waste item). Two former "other" entries (suitcase, umbrella — no single
+# dominant material) are dropped rather than force-fitted, since the
+# taxonomy no longer has a catch-all class to put them in at all.
 # ---------------------------------------------------------------------------
+from .taxonomy import FAMILY_TO_CLASSES as _FAM
+
 COCO_TO_WASTE: dict[str, Rule] = {
-    # --- certain: food waste -------------------------------------------------
-    "banana": Rule(("organic",), "food"),
-    "apple": Rule(("organic",), "food"),
-    "orange": Rule(("organic",), "food"),
-    "broccoli": Rule(("organic",), "food"),
-    "carrot": Rule(("organic",), "food"),
-    "sandwich": Rule(("organic",), "food"),
-    "hot dog": Rule(("organic",), "food"),
-    "pizza": Rule(("organic",), "food"),
-    "donut": Rule(("organic",), "food"),
-    "cake": Rule(("organic",), "food"),
+    # --- certain: food waste (organic family's one generic-food item) -------
+    "banana": Rule(("food_waste",), "food"),
+    "apple": Rule(("food_waste",), "food"),
+    "orange": Rule(("food_waste",), "food"),
+    "broccoli": Rule(("food_waste",), "food"),
+    "carrot": Rule(("food_waste",), "food"),
+    "sandwich": Rule(("food_waste",), "food"),
+    "hot dog": Rule(("food_waste",), "food"),
+    "pizza": Rule(("food_waste",), "food"),
+    "donut": Rule(("food_waste",), "food"),
+    "cake": Rule(("food_waste",), "food"),
 
-    # --- certain: metal ------------------------------------------------------
-    "fork": Rule(("metal",), "cutlery"),
-    "knife": Rule(("metal",), "cutlery"),
-    "spoon": Rule(("metal",), "cutlery"),
-    "scissors": Rule(("metal",), "steel blades + plastic handle; metal dominates"),
+    # --- certain: e-waste (hazardous family's one generic electronics item) -
+    "cell phone": Rule(("e_waste",), "e-waste"),
+    "remote": Rule(("e_waste",), "e-waste"),
+    "keyboard": Rule(("e_waste",), "e-waste"),
+    "mouse": Rule(("e_waste",), "e-waste"),
+    "hair drier": Rule(("e_waste",), "e-waste"),
 
-    # --- certain: paper / glass ---------------------------------------------
-    "book": Rule(("paper",), ""),
-    "wine glass": Rule(("glass",), "stemware is glass by definition"),
+    # --- constrained: metal family has no cutlery item, but the material
+    # itself is unambiguous, so this still narrows the classifier usefully --
+    "fork": Rule(_FAM["metal"], "cutlery; no metal item is cutlery-shaped, "
+                 "constrains to the material family instead"),
+    "knife": Rule(_FAM["metal"], "cutlery; see fork"),
+    "spoon": Rule(_FAM["metal"], "cutlery; see fork"),
+    "scissors": Rule(_FAM["metal"], "steel blades + plastic handle; metal dominates"),
 
-    # --- certain: other (e-waste, textile, misc non-recyclable) --------------
-    "cell phone": Rule(("other",), "e-waste"),
-    "remote": Rule(("other",), "e-waste"),
-    "keyboard": Rule(("other",), "e-waste"),
-    "mouse": Rule(("other",), "e-waste"),
-    "hair drier": Rule(("other",), "e-waste"),
-    "teddy bear": Rule(("other",), "textile"),
-    "tie": Rule(("other",), "textile"),
-    "backpack": Rule(("other",), "textile"),
-    "handbag": Rule(("other",), "textile"),
-    "suitcase": Rule(("other",), "mixed materials"),
-    "umbrella": Rule(("other",), "mixed materials"),
-    "toothbrush": Rule(("plastic",), "moulded plastic handle dominates"),
+    # --- constrained: paper/glass families have no exact book/stemware item -
+    "book": Rule(_FAM["paper"], "bound printed paper; no item is book-shaped"),
+    "wine glass": Rule(_FAM["glass"], "stemware is glass; no item is stemware-shaped"),
+    "vase": Rule(_FAM["glass"], "glass or ceramic; ceramic has no home in this "
+                 "taxonomy, so this only fires when it plausibly is glass"),
 
-    # --- constrained: identity narrows, classifier decides -------------------
-    "bottle": Rule(("plastic", "glass", "metal"),
-                   "PET / glass / aluminium all present as bottles"),
-    "cup": Rule(("paper", "plastic", "glass"),
-                "disposable paper, plastic, or a glass tumbler"),
-    "bowl": Rule(("plastic", "glass", "metal", "paper"),
-                 "widest container ambiguity — rules out only organic/cardboard"),
-    "vase": Rule(("glass", "other"), "glass or ceramic; ceramic falls to other"),
+    # --- constrained: textile family (clothing, shoes) ----------------------
+    "teddy bear": Rule(_FAM["textile"], "fabric-dominant; closest available family"),
+    "tie": Rule(_FAM["textile"], "clothing"),
+    "backpack": Rule(_FAM["textile"], "fabric-dominant; closest available family"),
+    "handbag": Rule(_FAM["textile"], "fabric-dominant; closest available family"),
+
+    # --- constrained: plastic family, no toothbrush-specific item -----------
+    "toothbrush": Rule(_FAM["plastic"], "moulded plastic handle dominates"),
+
+    # --- constrained: identity narrows, classifier decides among survivors --
+    "bottle": Rule(("plastic_water_bottles", "plastic_soda_bottles",
+                     "plastic_detergent_bottles", "glass_beverage_bottles"),
+                    "PET / glass bottle shapes; no metal item is bottle-shaped"),
+    "cup": Rule(("paper_cups", "styrofoam_cups", "plastic_cup_lids"),
+                "disposable paper, styrofoam, or plastic cup/lid"),
+    "bowl": Rule(("plastic_food_containers", "glass_food_jars",
+                   "steel_food_cans", "aluminum_food_cans"),
+                  "food container across plastic/glass/metal"),
 }
 
 
