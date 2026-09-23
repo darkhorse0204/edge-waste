@@ -70,6 +70,7 @@ class Track:
     oci_score: float | None = None
     route: str = ""
     hazard_suspected: bool = False
+    sam_fill_ratio: float | None = None  # mask_area/box_area from SAM refinement, if enabled
 
     @property
     def object_class(self) -> str:
@@ -85,7 +86,8 @@ class Track:
 
 
 def _classify_track_crops(tracks: dict[int, Track], classifier, tfm, class_names, device,
-                           oci_model, mc_passes: int, rng) -> None:
+                           oci_model, mc_passes: int, rng, sam_model=None,
+                           sam_margin_frac: float = 0.12) -> None:
     """Run the material classifier once per track, on its best crop.
 
     Deliberately deferred to the end rather than run per frame: the
@@ -93,11 +95,33 @@ def _classify_track_crops(tracks: dict[int, Track], classifier, tfm, class_names
     and only one crop per physical item actually matters. Using the largest
     crop the track ever produced picks the frame where the item was closest
     to the camera, i.e. the most informative view.
+
+    When `sam_model` is given, each crop is further refined with box-prompted
+    SAM before classification (see segment.py) — the detector's rectangle
+    around a small or elongated item still includes real background pixels
+    inside the box, and this replaces them with a neutral fill so the
+    classifier sees the item, not the item plus whatever was behind it. The
+    box handed to SAM is the crop inset by `sam_margin_frac` on each side
+    (roughly "the object is somewhere in the middle, find its exact edges"),
+    since only the crop — not the full source frame — is retained per track.
     """
     for track in tracks.values():
         if track.best_crop is None:
             continue
-        x = tfm(track.best_crop).unsqueeze(0).to(device)
+        crop_for_cls = track.best_crop
+        if sam_model is not None:
+            from .segment import segment_and_mask
+
+            w, h = track.best_crop.size
+            mx, my = int(w * sam_margin_frac), int(h * sam_margin_frac)
+            inset_box = (mx, my, max(mx + 1, w - mx), max(my + 1, h - my))
+            try:
+                _, suppressed, seg = segment_and_mask(sam_model, track.best_crop, inset_box)
+                track.sam_fill_ratio = seg.fill_ratio
+                crop_for_cls = suppressed
+            except Exception as exc:  # a degenerate crop must not kill the whole survey
+                print(f"[segment] track #{track.track_id}: SAM refinement skipped ({exc})")
+        x = tfm(crop_for_cls).unsqueeze(0).to(device)
         mean_probs, uncertainty = mc_dropout_predict(classifier, x, n_passes=mc_passes)
         raw_idx = int(mean_probs[0].argmax())
         track.material_raw = class_names[raw_idx]
@@ -129,6 +153,7 @@ def run_video(
     cfg: Config, source: str, det_ckpt: str, cls_ckpt: str, out_dir: str,
     conf_threshold: float | None = None, mc_passes: int = 8,
     save_video: bool = True, max_frames: int | None = None,
+    segment: bool = False, sam_model_path: str = "mobile_sam.pt",
 ) -> dict[int, Track]:
     import cv2
     from ultralytics import YOLO
@@ -140,6 +165,11 @@ def run_video(
     rng = np.random.default_rng(cfg.data.seed)
 
     oci_model = fit_demo_oci_model()
+    sam_model = None
+    if segment:
+        from .segment import load_sam
+        sam_model = load_sam(sam_model_path)
+        print(f"[segment] SAM refinement enabled ({sam_model_path})")
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -214,7 +244,7 @@ def run_video(
     print(f"\nTracked {len(tracks)} unique items across {frame_idx} frames.")
     print("Classifying material for each tracked item...")
     _classify_track_crops(tracks, classifier, tfm, class_names, device,
-                           oci_model, mc_passes, rng)
+                           oci_model, mc_passes, rng, sam_model=sam_model)
 
     _write_reports(tracks, out, source, frame_idx)
     return tracks
@@ -227,7 +257,8 @@ def _write_reports(tracks: dict[int, Track], out: Path, source: str, n_frames: i
         writer.writerow(["track_id", "object_class", "object_conf", "material",
                           "material_raw", "prior_corrected", "consistent",
                           "material_conf", "uncertainty", "oci_score", "route",
-                          "hazard_suspected", "first_frame", "last_frame", "frames_visible"])
+                          "hazard_suspected", "sam_fill_ratio",
+                          "first_frame", "last_frame", "frames_visible"])
         for t in sorted(tracks.values(), key=lambda t: t.first_frame):
             writer.writerow([
                 t.track_id, t.object_class, f"{t.object_conf:.3f}", t.material,
@@ -235,6 +266,7 @@ def _write_reports(tracks: dict[int, Track], out: Path, source: str, n_frames: i
                 f"{t.material_conf:.3f}", f"{t.uncertainty:.3f}",
                 "" if t.oci_score is None else f"{t.oci_score:.3f}",
                 t.route, int(t.hazard_suspected),
+                "" if t.sam_fill_ratio is None else f"{t.sam_fill_ratio:.3f}",
                 t.first_frame, t.last_frame, t.n_frames,
             ])
 
@@ -272,6 +304,13 @@ def _write_reports(tracks: dict[int, Track], out: Path, source: str, n_frames: i
         f"Material corrected by identity prior: {corrected}",
         f"Unresolved object/material contradictions: {len(contradictions)}",
         f"Hazard-suspected but too uncertain to act on (priority review): {hazard_suspected}",
+    ]
+    fill_ratios = [t.sam_fill_ratio for t in tracks.values() if t.sam_fill_ratio is not None]
+    if fill_ratios:
+        lines.append(f"SAM refinement: mean box fill ratio {np.mean(fill_ratios):.2f} "
+                     f"({len(fill_ratios)} items) - lower means more background the "
+                     f"detector's box included but SAM masked out before classification")
+    lines += [
         "",
         "BY OBJECT TYPE",
         "-" * 46,
@@ -308,13 +347,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--mc-passes", type=int, default=8)
     ap.add_argument("--max-frames", type=int, default=None)
     ap.add_argument("--no-video", action="store_true", help="Skip writing annotated.mp4.")
+    ap.add_argument("--segment", action="store_true",
+                     help="Refine each crop with box-prompted SAM before classifying "
+                          "(masks out background the detector's box included).")
+    ap.add_argument("--sam-model", default="mobile_sam.pt")
     args = ap.parse_args(argv)
 
     out_dir = args.out_dir or f"runs/video/{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}"
     cfg = Config.load(args.config)
     run_video(cfg, args.source, args.det_ckpt, args.cls_ckpt, out_dir,
                conf_threshold=args.conf, mc_passes=args.mc_passes,
-               save_video=not args.no_video, max_frames=args.max_frames)
+               save_video=not args.no_video, max_frames=args.max_frames,
+               segment=args.segment, sam_model_path=args.sam_model)
     return 0
 
 

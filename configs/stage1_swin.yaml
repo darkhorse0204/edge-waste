@@ -1,0 +1,57 @@
+# Architecture ablation: ConvNeXt + Swin Transformer, in place of ConvNeXt +
+# ViT (configs/stage1.yaml). Everything else — data, training schedule,
+# hyperparameters — is held identical on purpose, so any accuracy difference
+# is attributable to the backbone swap and nothing else.
+#
+# Swin's windowed local attention is a different inductive bias from plain
+# ViT's global attention over all patches: Swin builds a feature hierarchy
+# (like a CNN) via shifted windows, which is closer to ConvNeXt's own
+# inductive bias than ViT's is. Whether "closer to ConvNeXt" helps or hurts
+# the fusion is exactly the empirical question this ablation answers — a
+# more similar backbone could either fuse more effectively or contribute
+# less complementary information, and it isn't obvious which without running
+# it.
+#
+# Usage:
+#   edgewaste-train --config configs/stage1_swin.yaml
+#   edgewaste-eval  --config configs/stage1_swin.yaml --ckpt runs/stage1_swin/best.pt
+
+data:
+  processed_dir: data/processed
+  downloads_dir: data/downloads
+  manifest: data/splits.csv
+  val_fraction: 0.15
+  test_fraction: 0.15
+  seed: 42
+
+model:
+  convnext: convnext_tiny
+  vit: swin_tiny_patch4_window7_224   # generic backbone slot; see hybrid.py
+  image_size: 224
+  fusion_dim: 512
+  dropout: 0.2
+  pretrained: true   # same rationale as stage1.yaml — do not train from scratch
+
+train:
+  # Bounded to 2 for a same-session ablation: measured ~61 min/epoch on this
+  # machine's RTX 2050 (vs. Colab's T4, which trained the ConvNeXt+ViT model
+  # in ~4 min/epoch), so a full 15-epoch run here would take 15+ hours. This
+  # gives a real, directly-comparable number against the ConvNeXt+ViT run's
+  # own epoch 1/2 (val acc 0.527, 0.692) rather than no ablation at all. Bump
+  # to 15 for a full apples-to-apples comparison if a GPU with Colab-class
+  # throughput is available.
+  epochs: 2
+  batch_size: 32
+  lr: 0.0003
+  weight_decay: 0.05
+  warmup_epochs: 1
+  label_smoothing: 0.1
+  num_workers: 2   # >2 hits Windows ERROR_COMMITMENT_LIMIT on this machine
+  amp: true
+  use_class_weights: true
+  grad_clip: 1.0
+  output_dir: runs/stage1_swin
+  early_stop_patience: 5
+
+detect:
+  conf_threshold: 0.45
