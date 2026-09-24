@@ -42,6 +42,7 @@ def decide(
     class_name: str, cls_conf: float, uncertainty: float, oci_score: float | None,
     uncertainty_threshold: float = UNCERTAINTY_REVIEW_THRESHOLD,
     oci_threshold: float = OCI_CONTAMINATION_THRESHOLD,
+    family_set: set[str] | None = None,
 ) -> Decision:
     """Route one item. Ambiguity beats confidence: an uncertain vision call
     is checked by a human before an OCI-contaminated but confidently-typed
@@ -66,7 +67,15 @@ def decide(
     soda bottle share a chute, so a fine-grained confusion within a family
     is harmless at this stage. That is what makes the hierarchical metric in
     `evaluate.py` the one that reflects real sorting performance.
+
+    `family_set`, when given, is the conformal prediction set from
+    `conformal.ConformalRouter`; routing then follows the set instead of the
+    top-1 class, which bounds hazard leakage at a calibrated rate.
     """
+    if family_set is not None:
+        return _decide_from_set(class_name, cls_conf, uncertainty, oci_score,
+                                family_set, uncertainty_threshold, oci_threshold)
+
     family = family_of(class_name)
 
     if is_hazardous(class_name):
@@ -96,6 +105,45 @@ def decide(
     return Decision(class_name, family, cls_conf, uncertainty, oci_score,
                      route=family, gate=GATE_INDEX[family],
                      reason="clean classification, low uncertainty, OCI below threshold")
+
+
+def _decide_from_set(
+    class_name: str, cls_conf: float, uncertainty: float, oci_score: float | None,
+    family_set: set[str], uncertainty_threshold: float, oci_threshold: float,
+) -> Decision:
+    """Set-valued routing. Any set containing the hazardous family never
+    reaches a recycling/compost gate; automatic actuation needs a singleton
+    set AND low MC-Dropout uncertainty (the conformal guarantee does not
+    cover out-of-distribution input, the uncertainty gate does)."""
+    ordered = sorted(family_set, key=FAMILY_TO_INDEX.get)
+    family = ordered[0] if len(ordered) == 1 else family_of(class_name)
+    set_txt = "{" + ", ".join(ordered) + "}"
+
+    if "hazardous" in family_set:
+        if len(family_set) == 1 and uncertainty < uncertainty_threshold:
+            return Decision(class_name, "hazardous", cls_conf, uncertainty, oci_score,
+                             route="hazardous", gate=GATE_INDEX["hazardous"],
+                             reason=f"conformal set {set_txt} - hazardous stream")
+        return Decision(class_name, family, cls_conf, uncertainty, oci_score,
+                         route="manual_review", gate=GATE_MANUAL_REVIEW,
+                         hazard_suspected=True,
+                         reason=f"conformal set {set_txt} includes hazardous - "
+                                f"barred from recycling, priority human check")
+
+    if len(family_set) != 1 or uncertainty >= uncertainty_threshold:
+        return Decision(class_name, family, cls_conf, uncertainty, oci_score,
+                         route="manual_review", gate=GATE_MANUAL_REVIEW,
+                         reason=f"conformal set {set_txt}, uncertainty {uncertainty:.2f}")
+
+    if oci_score is not None and oci_score >= oci_threshold and family != "organic":
+        return Decision(class_name, family, cls_conf, uncertainty, oci_score,
+                         route="contaminated_reject", gate=GATE_CONTAMINATED_REJECT,
+                         reason=f"OCI {oci_score:.2f} >= {oci_threshold:.2f} on a "
+                                f"non-organic item - recycling-stream contamination risk")
+
+    return Decision(class_name, family, cls_conf, uncertainty, oci_score,
+                     route=family, gate=GATE_INDEX[family],
+                     reason=f"conformal singleton {set_txt}, low uncertainty, OCI below threshold")
 
 
 def actuate_conveyor(decision: Decision) -> str:
