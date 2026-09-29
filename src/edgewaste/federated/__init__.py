@@ -1,3 +1,4 @@
+# __init__.py - federated learning simulation across virtual sorting units
 """Federated learning simulation (blueprint Module 10).
 
 A single-machine FedAvg simulator: partitions the training manifest across
@@ -16,6 +17,6 @@ built, since it needs multiple physical/virtual devices to demonstrate
 anything a single-process simulation doesn't already show.
 """
 
-from .simulate import fedavg, local_train, partition_indices, run_simulation
+from edgewaste.federated.fedavg_simulation import fedavg, local_train, partition_indices, run_simulation
 
 __all__ = ["fedavg", "local_train", "partition_indices", "run_simulation"]

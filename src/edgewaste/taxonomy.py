@@ -1,3 +1,4 @@
+# taxonomy.py - the 33 waste item classes, their 9 material families and which are hazardous
 """Canonical waste taxonomy and per-source class mappings.
 
 **Decision (2026-09-23, supersedes the 11-class and earlier 7-class

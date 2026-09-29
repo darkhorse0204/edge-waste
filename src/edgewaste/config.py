@@ -1,4 +1,5 @@
-"""Typed configuration loaded from a YAML file (see configs/stage1.yaml)."""
+# config.py - loads yaml config files into typed settings for data, model, training and detection
+"""Typed configuration loaded from a YAML file (see configs/classifier_convnext_vit.yaml)."""
 
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ class DataConfig:
     processed_dir: str = "data/processed"
     # Where kaggle downloads are unpacked before ingest.
     downloads_dir: str = "data/downloads"
-    # Split manifest (CSV) written by edgewaste.data.splits.
+    # Split manifest (CSV) written by edgewaste.data.make_data_splits.
     manifest: str = "data/splits.csv"
     val_fraction: float = 0.15
     test_fraction: float = 0.15
@@ -43,7 +44,20 @@ class TrainConfig:
     label_smoothing: float = 0.1
     num_workers: int = 4
     amp: bool = True  # mixed precision (ignored on CPU)
-    use_class_weights: bool = True  # handle the known class imbalance
+    # Class-imbalance correction, applied ONCE: "sampler" (balanced batches via
+    # WeightedRandomSampler), "loss_weights" (inverse-frequency cross-entropy
+    # weights), "both" (over-corrects: minority classes end up weighted ~1/n^2;
+    # kept only to reproduce the 89.30% checkpoint) or "none".
+    imbalance_strategy: str = "sampler"
+    # Learning rate of the two pretrained backbones = lr * backbone_lr_mult
+    # (the new projection/fusion/head layers always use lr). 1.0 = one LR for
+    # everything, as the 89.30% checkpoint was trained; < 1 protects the
+    # pretrained features from being distorted by large early updates.
+    backbone_lr_mult: float = 1.0
+    # Linear-probe-then-fine-tune: keep both backbones frozen for this many
+    # initial epochs so the randomly initialised head cannot push large,
+    # noisy gradients into the pretrained features (Kumar et al., ICLR 2022).
+    freeze_backbone_epochs: int = 0
     grad_clip: float = 1.0
     output_dir: str = "runs/stage1"
     early_stop_patience: int = 5
@@ -61,14 +75,14 @@ class DetectConfig:
     # the Stage-1 classifier's job on the resulting crop.
     data_yaml: str = "data/detect/taco/data.yaml"
     class_name: str = "waste_item"
-    model: str = "yolo26n.pt"
+    model: str = "weights/yolo26n.pt"
     image_size: int = 640
     epochs: int = 60
     batch_size: int = 16
     output_dir: str = "runs/detect"
     # Inference-time detection gate. Raised from 0.35 to 0.45: the live camera
-    # launchers pass configs/stage1.yaml, which has no `detect:` section, so
-    # this default — not detect.yaml's value — is what the demo actually used.
+    # launchers pass configs/classifier_convnext_vit.yaml, which has no `detect:` section, so
+    # this default — not detector_yolo_taco.yaml's value — is what the demo actually used.
     # Weak boxes are the ones with sloppy edges, and a sloppy box means a
     # sloppy crop and an unstable prediction.
     conf_threshold: float = 0.45
@@ -126,13 +140,13 @@ class ExplainConfig:
 
 @dataclass
 class RecognizeConfig:
-    """COCO object-identity stage (see recognize.py). Pretrained, never trained
+    """COCO object-identity stage (see detection/coco_object_recognizer.py). Pretrained, never trained
     here — it only supplies a prior over the material classifier's output."""
 
     enabled: bool = True
-    # COCO-pretrained weights. yolo26n.pt is the same base checkpoint the TACO
+    # COCO-pretrained weights. weights/yolo26n.pt is the same base checkpoint the TACO
     # detector was fine-tuned from, so no new architecture enters the project.
-    model: str = "yolo26n.pt"
+    model: str = "weights/yolo26n.pt"
     # 0.50, not COCO's usual 0.25: a *wrong* identity can drag a correct
     # material prediction down (a glass jar mislabelled "book" at 48% pulls
     # toward paper). Testing on real data showed 0.50 drops the false IDs

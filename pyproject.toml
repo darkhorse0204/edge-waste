@@ -1,3 +1,4 @@
+# pyproject.toml - python package definition, dependencies and edgewaste-* command-line entry points
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -6,7 +7,7 @@ build-backend = "setuptools.build_meta"
 name = "edgewaste"
 version = "0.1.0"
 description = "Edge-deployed waste classification with sensor-augmented vision and federated learning"
-readme = "README.md"
+readme = "readme.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
@@ -36,18 +37,18 @@ export = ["onnx>=1.15", "onnxruntime>=1.17"]
 dev = ["pytest>=8.0", "ruff>=0.5"]
 
 [project.scripts]
-edgewaste-ingest = "edgewaste.data.ingest:main"
-edgewaste-fetch = "edgewaste.data.kaggle_sources:main"
-edgewaste-split = "edgewaste.data.splits:main"
-edgewaste-train = "edgewaste.train:main"
-edgewaste-eval = "edgewaste.evaluate:main"
-edgewaste-infer = "edgewaste.infer:main"
-edgewaste-detect-fetch = "edgewaste.detect.data:main"
-edgewaste-detect-train = "edgewaste.detect.train:main"
-edgewaste-pipeline = "edgewaste.pipeline:main"
-edgewaste-federated = "edgewaste.federated.simulate:main"
-edgewaste-export = "edgewaste.export_onnx:main"
-edgewaste-video = "edgewaste.video:main"
+edgewaste-ingest = "edgewaste.data.ingest_raw_datasets:main"
+edgewaste-fetch = "edgewaste.data.download_kaggle_datasets:main"
+edgewaste-split = "edgewaste.data.make_data_splits:main"
+edgewaste-train = "edgewaste.classification.train_classifier:main"
+edgewaste-eval = "edgewaste.classification.evaluate_classifier:main"
+edgewaste-infer = "edgewaste.classification.run_inference:main"
+edgewaste-detect-fetch = "edgewaste.detection.prepare_taco_dataset:main"
+edgewaste-detect-train = "edgewaste.detection.train_detector:main"
+edgewaste-pipeline = "edgewaste.applications.live_camera_pipeline:main"
+edgewaste-federated = "edgewaste.federated.fedavg_simulation:main"
+edgewaste-export = "edgewaste.classification.export_onnx:main"
+edgewaste-video = "edgewaste.applications.video_litter_survey:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

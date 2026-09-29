@@ -1,3 +1,4 @@
+# .gitignore - files kept out of git: datasets, checkpoints, weights, faculty documents, patent drafts
 # Python
 __pycache__/
 *.py[cod]
@@ -48,3 +49,11 @@ Thumbs.db
 
 # Local editor / tooling config
 .claude/
+
+# private documents: faculty review submissions and pre-filing patent drafts
+# (committing a patent draft before filing counts as public disclosure)
+/docs/faculty_reviews/
+/docs/patent_drafts/
+
+# downloaded base model weights (yolo26n, mobile sam)
+/weights/
