@@ -38,7 +38,7 @@ def _make_loaders(cfg: Config, smoke: bool):
         val_ds = None
 
     if smoke:
-        # Subsample for a fast end-to-end sanity check.
+        # subsample for a fast end-to-end sanity check.
         n = min(64, len(train_ds))
         train_ds = Subset(train_ds, list(range(n)))
         if val_ds is not None:
@@ -129,7 +129,7 @@ def train(cfg: Config, smoke: bool = False) -> Path:
 
     for epoch in range(1, epochs + 1):
         frozen = epoch <= cfg.train.freeze_backbone_epochs
-        for p in backbone:  # frozen params get no gradient, so AdamW skips them entirely
+        for p in backbone:  # frozen params get no gradient, so adamw skips them entirely
             p.requires_grad_(not frozen)
         if frozen:
             print(f"epoch {epoch}: backbones frozen (linear-probe phase)")
@@ -185,7 +185,7 @@ def train(cfg: Config, smoke: bool = False) -> Path:
         history.append(rec)
         (out_dir / "history.json").write_text(json.dumps(history, indent=2))
 
-    # Always keep a final checkpoint too.
+    # always keep a final checkpoint too.
     _save_checkpoint(out_dir / "last.pt", model, cfg, epochs, best_val)
     print(f"\nBest val acc: {best_val:.3f}" if best_val >= 0 else "Done.")
     print(f"Checkpoints in {out_dir}")
@@ -193,7 +193,7 @@ def train(cfg: Config, smoke: bool = False) -> Path:
 
 
 def _save_checkpoint(path: Path, model, cfg: Config, epoch: int, metric: float):
-    # Atomic write: serialize to a temp file, then replace. A failed/partial
+    # atomic write: serialize to a temp file, then replace. a failed/partial
     # write (e.g. disk full) never clobbers a previously-good checkpoint.
     tmp = path.with_suffix(path.suffix + ".tmp")
     try:

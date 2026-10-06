@@ -14,7 +14,7 @@ def pick_device(prefer: str = "auto") -> torch.device:
         return torch.device(prefer)
     if torch.cuda.is_available():
         return torch.device("cuda")
-    # Apple Silicon fallback, harmless elsewhere.
+    # apple silicon fallback, harmless elsewhere.
     if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
         return torch.device("mps")
     return torch.device("cpu")
@@ -57,7 +57,7 @@ def pad_box(box: tuple[int, int, int, int], width: int, height: int,
     py1 = max(0, int(round(y1 - dy)))
     px2 = min(width, int(round(x2 + dx)))
     py2 = min(height, int(round(y2 + dy)))
-    # Degenerate result (possible only if the input box was already degenerate)
+    # degenerate result (possible only if the input box was already degenerate)
     # — fall back to the original box rather than returning an empty crop.
     if px2 <= px1 or py2 <= py1:
         return box

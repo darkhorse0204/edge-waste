@@ -32,11 +32,23 @@ wherever it appears).
 | Macro ROC-AUC (one-vs-rest) | 0.981 | |
 | Detector mAP50 (1-class / 18-class TACO) | 0.700 / 0.383 | |
 
-These are the reported ConvNeXt + ViT hybrid. The analysis below found that an
-RBF SVM on *frozen* ImageNet ConvNeXt features does better — **93.3% item,
-97.1% family, 98.1% hazard recall** (McNemar p ≈ 8e-21) — which exposed a
-fine-tuning problem with a prepared fix; see
-[Improving the classifier](#improving-the-classifier).
+The table above is the first ConvNeXt + ViT hybrid (`runs/stage1`), the model the
+rest of the analysis is based on. The analysis found that an RBF SVM on *frozen*
+ImageNet ConvNeXt features did better (93.3% item, 97.1% family, 98.1% hazard
+recall, McNemar p ≈ 8e-21), which exposed a fine-tuning problem. The retrain
+with the fixed recipe (`runs/stage1_v2`) is the **current best model**:
+
+| v2 (Colab-reported, 4,232 test images) | Result |
+|---|---|
+| Item accuracy | **93.83%** |
+| Family / routing accuracy | **97.28%** |
+| Hazardous recall | **98.37%** |
+| Best validation accuracy | 93.86% (epoch 8 of 12) |
+
+v2's numbers are the ones Colab measured on its own held-out split; they have
+**not yet been independently reproduced locally** (see
+[Improving the classifier](#improving-the-classifier) for why, and how). Its
+bootstrap intervals, calibration and baselines are still those of the first model.
 
 ## Contents
 
@@ -52,7 +64,7 @@ fine-tuning problem with a prepared fix; see
 10. [Classical ML baselines: PCA, LDA, SVM, kNN, logistic regression, random forest, naive Bayes](#classical-ml-baselines)
 11. [What the model learned: embeddings and backbone attention](#what-the-model-learned)
 12. [Improving the classifier (findings and the next training run)](#improving-the-classifier)
-13. [Uncertainty and risk-bounded hazard routing](#uncertainty-and-risk-bounded-hazard-routing)
+13. [Uncertainty and risk-bounded hazard routing](#uncertainty-and-risk-bounded-hazard-routing), including the [Simulations](#simulations) that test it
 14. [Object detection](#object-detection)
 15. [Contamination index (sensor fusion)](#contamination-index-oci)
 16. [Decision engine](#decision-engine)
@@ -74,7 +86,10 @@ edge-waste/
 │                                     classifier_professor_dataset.yaml, detector_yolo_taco.yaml
 ├── notebooks/                        colab_classifier_training.ipynb (GPU training on Colab)
 ├── scripts/                          launchers, demos, analysis drivers, detector training helpers
+│   ├── prototype_sorter.py, calibrate_prototype_oci.py   run and calibrate the hardware prototype (mock mode needs no hardware)
+│   └── report/                       builds the project report (word) and the 25-slide review deck
 ├── reports/ml_analysis/              generated analysis: summary.json, CSV tables, figures/
+├── reports/simulations/              simulations of the claimed mechanisms: summary.json, figures/
 ├── src/edgewaste/
 │   ├── config.py, taxonomy.py, common_utils.py
 │   ├── data/                         download, ingest, split, load images
@@ -87,9 +102,13 @@ edge-waste/
 │   ├── federated/                    fedavg simulation
 │   ├── analysis/                     metrics, fit diagnostics, calibration, imbalance, baselines, cost
 │   └── applications/                 live camera pipeline, video litter survey
+├── hardware/arduino/sorter_node/     arduino firmware of the 2-day prototype (sensors, tilt servo, leds, buzzer)
+├── hardware/esp32/sorter_node_esp32/ esp32 firmware (dht22 humidity as moisture channel, mq-135, servo, boot button)
+├── docs/esp32_prototype_walkthrough.md   step-by-step build with esp32 + dht22 + mq-135 + servo
 ├── docs/planning/                    original plans and stage checklists (historical)
+├── docs/hardware_prototype_plan.md   two-day minimum-cost prototype: parts, wiring, build, calibration, schedule, tests
 ├── docs/faculty_reviews/             review submissions (not in git)
-├── docs/patent_drafts/               invention disclosure drafts (not in git — pre-filing)
+├── docs/report/                      BITE497J Project I report (docx, pdf), review slides (pptx), figures, videos (outputs not in git; mermaid sources are)
 ├── weights/                          base yolo26n / mobile sam weights (not in git)
 └── data/, runs/                      datasets, checkpoints, caches (not in git)
 ```
@@ -454,9 +473,40 @@ normally fine-tuned 10x lower.
 | Epochs | 15 | 25, early stopping patience 5 |
 | Output | `runs/stage1` | `runs/stage1_v2` (cannot overwrite the reported checkpoint) |
 
-Retraining takes ~1.7 GPU-hours on Colab (`notebooks/colab_classifier_training.ipynb`
-already points at the new folder). Target to beat: 93.3% (the frozen-feature
-SVM). **Not yet run** — this section will be updated with the measured result.
+**Result of the retrain (v2).** 12 epochs on a Colab T4 (~4 min each, 48 minutes
+in total), 617 steps per epoch. Per-epoch history is in `runs/stage1_v2/history.json`.
+
+| | v1 (reported) | v2 (this recipe) |
+|---|---|---|
+| Item accuracy (test) | 89.30% | **93.83%** |
+| Family accuracy | 94.14% | **97.28%** |
+| Hazardous recall | 93.50% (690/738) | **98.37%** (~726/738) |
+| Best val accuracy / epoch | 89.51% / 15 | 93.86% / 8 |
+| Training accuracy (augmented) at the end | — | 97.4% |
+
+- Validation accuracy was 90.0% after the **first** epoch (head only, backbones
+  frozen) and 93.7% by epoch 5, against 89.5% after 15 epochs for v1 — the
+  distortion diagnosis is supported: protecting the pretrained features is worth
+  about 4.5 points.
+- Validation loss was lowest at epoch 5 (0.830) and rose slowly afterwards while
+  training loss kept falling, a mild overfitting trend after epoch 8, as the
+  best epoch indicates.
+- **v2 is on par with, not clearly better than, the frozen-feature SVM** (93.3%):
+  the two were scored on different test splits (the split-hashing fix changed
+  which images fall in test), so the 0.5-point difference is inside the
+  ±0.9-point sampling noise and is not a paired comparison.
+- **Why it is not yet independently verified.** Re-scoring the v2 checkpoint on
+  the split rebuilt locally gave 96.8% — higher than Colab's own 93.8% — which is
+  the signature of leakage: the local manifest and Colab's contain different
+  images, so part of the local "test" set was in Colab's training set. The local
+  figure is discarded (the files are kept as `runs/stage1_v2/LEAKY_local_split_*`).
+  The check that exposed it: the checkpoint records its validation accuracy
+  (93.86%), and the local validation split gives 96.83%. `edgewaste-eval` now
+  runs this check automatically and refuses a manifest that does not reproduce
+  the training-time validation accuracy. To finish verification, copy
+  `data/splits.csv` and `data/processed/provenance.csv` from Google Drive
+  (`MyDrive/edge-waste/data/`) and map them onto the local images, as was done
+  for v1.
 
 **Available today without retraining:** the frozen ConvNeXt + RBF SVM
 classifier itself (93.3% / 97.1% / 98.1% hazard recall, half the parameters of
@@ -475,10 +525,16 @@ ConvNeXt-only model is worth testing as the next ablation.
 
 **MC-Dropout uncertainty.** 25 stochastic forward passes with dropout active
 (normalisation layers frozen); uncertainty = entropy of the mean distribution /
-log(33), in [0, 1]. Items at or above 0.5 go to manual review. A confident
-hazard is diverted immediately; an *uncertain* hazard goes to priority review
-and is never auto-routed — on an out-of-distribution test clip this cut false
-hazardous actuations from 12 to 0 (240 frames).
+log(33), in [0, 1]. A confident hazard is diverted immediately; an *uncertain*
+hazard goes to priority review and is never auto-routed — on an out-of-distribution
+test clip this cut false hazardous actuations from 12 to 0 (240 frames).
+
+**What the simulations found about it** ([Simulations](#simulations)): as an error
+detector it is *not better than the plain maximum class probability* (AUROC
+0.598 vs 0.657 for misclassified items), and the fixed review
+threshold of 0.5 sends 34.2% of all items to review, because label-smoothed training raises
+the entropy of correct predictions. The two-tier gate structure is what helps;
+its threshold should be calibrated to a review budget, not fixed at 0.5.
 
 **Conformal family-set routing** (`decision_engine/conformal_routing.py`).
 Top-1 routing lets a hazard reach a recycling bin whenever its single most
@@ -491,24 +547,75 @@ P(hazard reaches a non-hazard bin) ≤ α_H; a Beta-distribution rank correction
 makes it hold for the specific calibration with probability ≥ 1 − δ (verified
 on synthetic data: 2.1% of calibrations miss the target vs 39.5% without it).
 
-Measured on the 89.30% model's test split, 1,000 random calibration/evaluation
-halvings; baseline = max-softmax gate tuned to the **same** human-review workload:
+Measured on the 89.30% model's verified test split (4,232 items, 738 hazardous),
+300 random calibration/evaluation halvings per setting, non-hazard level α = 0.10;
+baseline = max-softmax gate tuned to the **same** human-review workload. Top-1 routing
+with no gate leaks 6.5% of hazards.
 
-| Setting | Hazard leak (mean / 95th pct) | Auto-routed | Matched-workload baseline leak |
+| α_H (hazard level) | Hazard leak, conformal (mean / 95th pct) | Items to review | Matched confidence gate (mean / 95th pct) | Advantage |
+|---|---|---|---|---|
+| 0.05 | **2.84% / 4.26%** | 5.7% | 3.50% / 4.58% | 1.2x |
+| 0.02 | **1.57% / 2.90%** | 7.8% | 3.55% / 5.09% | 2.3x |
+| 0.01 | **0.78% / 2.05%** | 31.1% | 1.77% / 4.52% | 2.3x |
+| 0.005 | **0.29% / 1.11%** | 39.5% | 1.37% / 2.17% | 4.7x |
+
+The measured leakage stays below α_H for every setting with α_H ≤ 0.05; the
+advantage over a tuned confidence gate is 1.2–2.3x at practical workloads (about
+8% review) and the mechanism's distinguishing feature is the *stated bound*. The
+per-deployment (δ) variant is too conservative at this calibration size (about 11%
+of items automatic). An earlier evaluation on a weaker 2-epoch checkpoint
+(22.9% leak reduced to 0.54%) is superseded.
+
+![conformal operating curve](reports/simulations/figures/fig_conformal_curve.png)
+
+## Simulations
+
+`python scripts/run_simulations.py` regenerates everything in this section
+(`reports/simulations/summary.json` and `figures/`). Real-data simulations use the
+89.30% model on its verified test split; sensor simulations use synthetic data and are
+labelled as such. They were run to test the claimed mechanisms, and
+several results are unfavourable — they are reported as found.
+
+**Routing outcomes per mechanism** (200 halvings, gates calibrated to a 10% review budget):
+
+| Configuration | Review share | Hazard leak | Non-hazard sent to hazard bin |
 |---|---|---|---|
-| Top-1 routing, no gate | 6.50% | 100% | — |
-| α = 0.10, α_H = 0.05 | **2.83% / 4.35%** | 94.3% | 3.48% / 4.67% |
-| α = 0.05, α_H = 0.02 | **1.13% / 2.23%** | 58.6% | 1.40% / 2.53% |
-| α = 0.05, α_H = 0.01 | **0.70% / 1.64%** | 52.6% | 1.18% / 2.07% |
-| α = 0.05, α_H = 0.02, δ = 0.05 (per-deployment guarantee) | 0.13% / 0.57% | 10.8% | 0.13% / 0.82% |
+| top-1 class only | 0.0% | 6.60% | 0.96% |
+| max-softmax gate | 10.1% | 3.30% | 0.68% |
+| MC-dropout gate | 10.1% | 4.88% | 0.84% |
+| conformal family sets | 5.6% | 2.88% | 1.14% |
+| conformal + MC-dropout gate | 13.0% | 2.64% | 0.85% |
+| conformal + max-softmax gate | 12.4% | **2.27%** | 0.66% |
 
-Conformal routing leaks fewer hazards than a tuned threshold at every matched
-workload (equal mean and a lower 95th percentile at the δ setting), and
-uniquely comes with a stated guarantee; the practical operating
-point is α_H = 0.05 (94% automatic). The margin over the baseline is smaller
-on this well-trained model than on the weaker 2-epoch Swin model (1.67% vs
-4.84% leak at α_H = 0.02), and the per-deployment (δ) version is too
-conservative to be practical at this calibration-set size.
+![routing outcomes](reports/simulations/figures/fig_routing_ablation.png)
+
+**Uncertainty estimator.** MC-dropout entropy: AUROC 0.598 for misclassified items vs 0.657 for
+max-softmax; accepting the 50% most certain items gives 90.9% vs 93.2% item accuracy.
+
+![uncertainty](reports/simulations/figures/fig_uncertainty.png)
+
+**Distribution shift** (1,500 test images corrupted by noise, blur, darkness, occlusion at three
+severities; thresholds calibrated on clean images only). The conformal bound is a statement about
+inputs like the calibration set and does **not** survive corruption: at noise sigma 0.2 (item accuracy
+53.9%) hazard leakage is 28.5% for top-1, 15.6% for conformal alone (target 5%), 9.8% with
+a max-softmax gate added, 10.9% with the MC-dropout gate. Gates help (most on false hazardous routing, e.g.
+blur sigma 4: 40.4% -> 12.5%) but do not restore the bound at severe corruption, and the max-softmax gate
+flags more shifted images than MC-dropout.
+
+![distribution shift](reports/simulations/figures/fig_distribution_shift.png)
+
+**Contamination index with a lost sensor channel (SYNTHETIC sensors).** For linear models,
+imputing a constant and re-tuning the threshold gives the *same decisions* as the dedicated
+single-channel model (identical AUROC). The dedicated models' benefit is a calibrated score and a
+sensitivity guarantee that holds in each availability case without recalibration: with the combined
+model's threshold left in place, imputing zero for a lost gas channel drops sensitivity to
+53.7% (target 95%), the dedicated model keeps 94.9%.
+
+![oci dropout](reports/simulations/figures/fig_oci_dropout_synthetic.png)
+
+**Training history of the improved recipe** (v2, Colab):
+
+![v2 training history](reports/simulations/figures/fig_training_history_v2.png)
 
 ## Object detection
 
@@ -563,7 +670,7 @@ actuator is a logged mock until hardware exists.
 | SAM segmentation (`detection/sam_segmentation.py`) | box-prompted MobileSAM mask removes background before classification | 36% of a test box was background, excluded |
 | DCGAN augmentation (`augmentation/gan_augmentation.py`) | per-class generator for rare classes | implemented; image quality (FID) not yet measured |
 | Federated learning (`federated/fedavg_simulation.py`) | FedAvg across simulated sorting units, IID and non-IID shards; only weights leave a unit | single-process simulation |
-| Video litter survey (`applications/video_litter_survey.py`) | ByteTrack IDs so each physical item is counted once | 19 unique items vs hundreds of per-frame detections (240 frames) |
+| Video litter survey (`applications/video_litter_survey.py`) | ByteTrack IDs so each physical item is counted once | 160 per-frame detections merged into 16 inventory entries (240-frame test clip of 12 litter photographs; no ground-truth count was set) |
 | ONNX export (`classification/export_onnx.py`) | edge-runtime model with PyTorch-parity check | max abs difference 9.42e-6; 203 MB classifier, 9.3 MB detector |
 
 ## Model cost
@@ -599,10 +706,18 @@ python scripts/collect_analysis_features.py --expect-acc 0.8930 # caches; fails 
 python scripts/run_ml_analysis.py                                # reports/ml_analysis (metrics, fit, calibration,
                                                                  # imbalance, baselines, projections, cost)
 python scripts/evaluate_conformal_routing.py --config configs/classifier_convnext_vit.yaml --ckpt runs/stage1/best.pt
+python scripts/run_simulations.py                                # reports/simulations (uncertainty, conformal, shift, routing, OCI dropout)
 ```
 
 Seeds are fixed (42 for data and training, 0 for analysis resampling);
 analysis inference runs in fp32 because fp16 flipped one of 4,232 predictions.
+
+### Colab troubleshooting
+
+- **Steps per epoch must be 617** (19,738 training images / 32). Double that means stale
+  duplicates in `data/processed` on Drive; the Step 6 gate now stops this. Cure: delete
+  `data/processed` and `data/splits.csv` on Drive (keep `data/downloads`), re-run Step 6.
+- **Step 8 must print `backbones frozen (linear-probe phase)` for epochs 1–2**, otherwise Colab is on old code.
 
 ## Limitations
 
@@ -611,8 +726,11 @@ analysis inference runs in fp32 because fp16 flipped one of 4,232 predictions.
   95% sensitivity), the actuator is a log line, and on-device latency is
   unmeasured on a Raspberry Pi.
 - **Domain shift:** training images are studio and curated household photos.
-  On outdoor litter footage accuracy drops sharply; MC-Dropout flags it (mean
-  uncertainty 0.68 vs near 0 in-distribution) but does not fix it.
+  On outdoor litter footage and on corrupted images accuracy drops sharply; the
+  uncertainty and conformal gates reduce but do not remove the hazard risk, and the
+  conformal bound does not hold under shift (see Simulations).
+- **The MC-dropout uncertainty is not better than max-softmax** at flagging errors in
+  this model (AUROC 0.60 vs 0.66), and its fixed 0.5 threshold over-flags (34% of items).
 - **The fine-tuning recipe is sub-optimal** — see [Improving the classifier](#improving-the-classifier).
 - **Look-alike classes** (cardboard boxes vs packaging, steel vs aluminium
   food cans) stay near 0.6 F1; they share a bin, so routing is unaffected.
@@ -665,14 +783,50 @@ conformal family sets; see [Uncertainty](#uncertainty-and-risk-bounded-hazard-ro
 report adds balanced accuracy, macro F1, kappa, MCC, AUCs, calibration error,
 and the two operational metrics: family (routing) accuracy and hazard recall.
 
+## Hardware prototype (two-day, minimum cost)
+
+A bench unit with a camera, a moisture sensor, an MQ-135 gas sensor, one servo that tilts a tray, three leds and a buzzer, driven by an Arduino over USB serial; the laptop runs the models. Full plan (parts about ₹1,000-1,800, wiring, build, calibration, schedule, tests): [docs/hardware_prototype_plan.md](docs/hardware_prototype_plan.md). With an ESP32, a DHT22 (humidity replaces the moisture probe), an MQ-135 and a servo, follow [docs/esp32_prototype_walkthrough.md](docs/esp32_prototype_walkthrough.md) and use `scripts/check_node.py` for bring-up.
+
+```bash
+pip install -e ".[hardware]"                                         # pyserial
+python scripts/prototype_sorter.py --mock-node --image <photo>       # whole software path with no hardware
+python scripts/calibrate_prototype_oci.py collect --port COM5        # then:  ... fit   (real contamination calibration)
+python scripts/prototype_sorter.py --port COM5 --camera 0            # live: button or SPACE classifies one item
+```
+
+Status: the software path is tested end to end in mock mode (image to decision to printed action, calibration collect and fit on invented data); the firmware and the real serial link have not been run on hardware yet. Calibration uses the validation split of the verified first model (`runs/stage1`), never the test split. Decisions are logged to `runs/prototype/log.csv`.
+
+## Project report and review slides
+
+The university report (template `Project-1 Report final.docx`: A4, left margin 1.5 in, Times New Roman 12, 1.5 spacing, chapter headings 14 pt capitals, roman then arabic page numbers, Word equations numbered by chapter, APA references, nine chapters plus Appendix A) and the 25-slide review deck are built by scripts, so every number comes from the repository:
+
+```bash
+python scripts/report/report_figures.py              # extra figures -> docs/report/figures
+# diagrams: mmdc -i docs/report/mermaid/<name>.mmd -o docs/report/figures/diag_<name>.png -s 2 -b white
+python scripts/report/make_report.py                 # raw docx (text lives in scripts/report/report_ch1..8.py)
+powershell scripts/report/finalize_report.ps1        # Word builds contents/figure/table lists, saves docx + pdf
+python scripts/report/build_slides.py                # docs/report/BITE497J_Project_I_Review_Slides.pptx (2 embedded videos)
+```
+
+Outputs: `docs/report/BITE497J_Project_I_Report.docx` (115 pages: front matter i–xix, chapters 1–9 on pages 1–90, appendix without page numbers) and `BITE497J_Project_I_Review_Slides.pptx`. References are in `scripts/report/report_refs.py` (APA 7). After editing the docx by hand, right-click the contents, figure and table lists and choose Update Field.
+
 ## Changelog
 
 | Date | Change |
 |---|---|
+| 2026-10-05 | ESP32 variant of the prototype: `hardware/esp32/sorter_node_esp32/sorter_node_esp32.ino` (DHT22 humidity x10 as the moisture channel, MQ-135 through a voltage divider, servo, BOOT-button trigger), `docs/esp32_prototype_walkthrough.md`, `scripts/check_node.py` bring-up tool, and a more robust serial link that skips ESP32 boot text. Serial class tested against a fake ESP32; firmware not compiled or run on hardware. |
+| 2026-10-03 | Two-day hardware prototype plan and software: `docs/hardware_prototype_plan.md` (bill of materials about ₹1,000-1,800, wiring, mechanics, hour-by-hour schedule, tests), Arduino firmware `hardware/arduino/sorter_node/sorter_node.ino`, `scripts/prototype_sorter.py` (camera + sensors + decision engine + tray commands, with `--mock-node`), `scripts/calibrate_prototype_oci.py` (collect and fit real contamination calibration), `edgewaste.applications.prototype_node` (serial link and mock). Tested in mock mode on real images and on invented sensor data; not yet run on physical hardware. |
+| 2026-10-02 | References from the Review 1 submission were re-checked against Crossref; corrections: Alkılınç et al. year and author list, Arun issue number, Radchenko and Fill identified (arXiv 2403.09141). Hardware cost figures are planning estimates. |
+| 2026-10-02 | Closest earlier work on camera + sensors is Chu et al. 2018. v12 (51-paper reference list) was superseded as too long. Plain list: `docs/references.md`. |
+| 2026-10-01 | Demonstration gallery (`scripts/make_demo_gallery.py` -> `reports/demo/gallery/`, run one part at a time: `classes`, `hazards`, `gradcam`, `detector`, `videos`, `oci`, `federated`, `gan`): all 33 classes with routing on random held-out images, per-class F1 chart, hazardous-family gallery, Grad-CAM on 16 classes, 18-class detector and MobileSAM cut-outs on benchmark photos, `class_tour.mp4`/`.gif` (33-class tour with routing banner), survey filmstrip/inventory charts/`survey.gif`, Organic Contamination Index response on simulated sensors, a new FedAvg simulation on stored embeddings (5 non-IID units, 15 rounds: 89.4% vs 89.0% central vs 81.4% mean local; backbone frozen, head averaged), GAN sample grid. A simulated 60-item conveyor figure was generated but left out of the draft because at the 95%-sensitivity threshold it flags most clean items too (see Table 7), which makes it a poor demonstration. |
+| 2026-10-01 | Demonstration snapshots (`scripts/make_demo_snapshots.py` -> `reports/demo/`: routing sheet on eight held-out images, explanation panel, annotated video frames, `worked_example.json`). **Correction:** the earlier claim "19 unique items, matching the true count" for the video-survey test clip could not be reproduced (re-runs: 16 with the 18-class detector, 13-17 with single-class detectors) and the clip (12 litter photographs x 20 frames) has no ground-truth item count; now reported as 160 per-frame detections merged into 16 inventory entries. |
+| 2026-10-01 | Figure labels in the simulation and analysis scripts now use spelled-out terms (Monte Carlo dropout, maximum-probability gate, principal component analysis, expected calibration error, and so on) and all figures were regenerated; numbers are unchanged. Simulated-sensor wording replaces "synthetic" in figure titles. |
+| 2026-10-01 | Simulation suite (`scripts/run_simulations.py`) testing each claimed mechanism: uncertainty-estimator quality, conformal operating curve and bound validity, routing outcomes per mechanism, behaviour under image corruption, and sensor-dropout handling on synthetic data. Findings reported as found: conformal bound valid for in-distribution inputs (2.3x lower leakage than a tuned confidence gate at ~8% review) but not under shift; MC-dropout is not a better error detector than max-softmax and its fixed 0.5 threshold over-flags; for linear models, dedicated single-channel OCI models match imputation with a re-tuned threshold. Synthetic generator gained `noise_scale`/`anchors` options (defaults unchanged). |
+| 2026-10-01 | v2 retrain finished (Colab, 12 epochs, 48 min): **93.83% item / 97.28% family / 98.37% hazard recall** (Colab-reported; validation 93.86% at epoch 8) vs 89.30 / 94.14 / 93.50 for v1 — the fine-tuning fix worked. A local re-score gave an inflated 96.8% because the local split differs from Colab's; discarded and quarantined (`LEAKY_local_split_*`). `edgewaste-eval` now refuses a manifest whose validation accuracy does not match the one recorded in the checkpoint. |
+| 2026-09-30 | Caught a duplicate-data hazard during the first Colab retrain (1,234 steps per epoch = 2x the 617 expected): the Drive `data/processed` folder still held the earlier run's old-named copies of every photo, so the split contained each image twice and could put one photo in both train and test. `make_data_splits` now splits only the images listed in the latest `provenance.csv` (ignoring and reporting stale files); the Colab notebook's Step 6 gate asserts split size == provenance size. The affected run was stopped and restarted on clean data. |
 | 2026-09-30 | Full ML analysis suite (`src/edgewaste/analysis/`, `scripts/run_ml_analysis.py`): complete metrics with bootstrap CIs, fit diagnostics, calibration, class imbalance, classical baselines (PCA/LDA/SVM/kNN/LR/RF/NB), embedding projections, backbone attention, model cost. Recovered and verified the exact Colab split. Found and fixed the double class-imbalance correction (`imbalance_strategy`). Added discriminative backbone learning rate (`backbone_lr_mult`) and moved the main config to an improved recipe writing to `runs/stage1_v2`. Conformal routing re-evaluated on the main model. `edgewaste-eval --manifest`. This readme rewritten as the universal reference. |
 | 2026-09-30 | Repository restructured into meaningful lowercase folders and file names; one-line header comment in every file. |
 | 2026-09-25 | Conformal hazard-leakage bound added (`conformal_routing.py`). |
-| 2026-09-24/25 | SHAP, LIME, SAM, DCGAN and Swin ablation added; invention disclosure drafted. |
 | 2026-09-23 | 33-class classifier trained on Colab (89.30%); corrupt-image and leakage bugs fixed; hazard confidence floor; ONNX export. |
 | 2026-09-22 | Taxonomy expanded from 7 to 33 classes / 9 families; 18-class detector; video survey; object-identity prior. |
 | 2026-07 | Stage 1 pipeline, 7-class classifier, 1-class detector. |

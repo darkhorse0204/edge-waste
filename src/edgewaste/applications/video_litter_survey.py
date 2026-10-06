@@ -34,8 +34,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
-import torch
-import torch.nn.functional as F
 from PIL import Image
 
 from edgewaste.config import Config
@@ -71,7 +69,7 @@ class Track:
     oci_score: float | None = None
     route: str = ""
     hazard_suspected: bool = False
-    sam_fill_ratio: float | None = None  # mask_area/box_area from SAM refinement, if enabled
+    sam_fill_ratio: float | None = None  # mask_area/box_area from sam refinement, if enabled
 
     @property
     def object_class(self) -> str:
@@ -127,7 +125,7 @@ def _classify_track_crops(tracks: dict[int, Track], classifier, tfm, class_names
         raw_idx = int(mean_probs[0].argmax())
         track.material_raw = class_names[raw_idx]
 
-        # Cross-validate the classifier against what the detector says the
+        # cross-validate the classifier against what the detector says the
         # object *is* — see decision_engine/object_identity_prior.py.
         adjusted = apply_identity_prior(mean_probs[0], track.object_class, class_names)
         conf, idx = adjusted.max(0)
@@ -144,7 +142,7 @@ def _classify_track_crops(tracks: dict[int, Track], classifier, tfm, class_names
 
         decision = decide(track.material, track.material_conf, track.uncertainty,
                            track.oci_score)
-        # A surviving object/material contradiction means one of the two
+        # a surviving object/material contradiction means one of the two
         # stages is wrong on this item; don't sort it on a coin flip.
         track.route = "manual_review" if not track.consistent else decision.route
         track.hazard_suspected = decision.hazard_suspected
@@ -191,7 +189,7 @@ def run_video(
         writer = cv2.VideoWriter(str(out / "annotated.mp4"), fourcc, fps, (width, height))
 
     tracks: dict[int, Track] = {}
-    # persist=True keeps ByteTrack's state across calls so IDs stay stable.
+    # persist=true keeps bytetrack's state across calls so ids stay stable.
     stream = detector.track(source=source, stream=True, persist=True,
                              conf=conf, tracker="bytetrack.yaml", verbose=False)
 
@@ -339,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Video litter survey with tracking + inventory.")
     ap.add_argument("--config", default="configs/classifier_convnext_vit.yaml")
     ap.add_argument("--source", required=True, help="Video file path (or a camera index).")
-    # Ultralytics nests project/ under its own runs_dir, hence the doubled path.
+    # ultralytics nests project/ under its own runs_dir, hence the doubled path.
     ap.add_argument("--det-ckpt",
                      default="runs/detect/runs/detect/taco_multiclass/weights/best.pt")
     ap.add_argument("--cls-ckpt", default="runs/stage1/best.pt")

@@ -36,7 +36,6 @@ from __future__ import annotations
 import argparse
 import time
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 import torch
@@ -62,7 +61,7 @@ class Detection:
     class_name: str  # what is displayed — may be the unknown label
     cls_conf: float  # what is displayed — smoothed when smoothing is on
     attn: tuple[float, float] | None = None  # (convnext_weight, vit_weight)
-    # Pre-smoothing values for this frame alone. Kept so the CSV records both
+    # pre-smoothing values for this frame alone. kept so the csv records both
     # and the flicker reduction can be quantified after the fact.
     raw_class_name: str = ""
     raw_cls_conf: float = 0.0
@@ -70,14 +69,14 @@ class Detection:
     votes: int = 0  # frames in the window agreeing with the displayed class
     window: int = 1  # frames currently in the window
     is_unknown: bool = False
-    # Object identity (COCO). Empty when nothing was recognised.
+    # object identity (coco). empty when nothing was recognised.
     object_name: str = ""
     object_conf: float = 0.0
-    # Which stage actually decided the material — identity / constrained /
-    # material. Displayed and logged so a prediction is always traceable.
+    # which stage actually decided the material — identity / constrained /
+    # material. displayed and logged so a prediction is always traceable.
     decided_by: str = FROM_MATERIAL
-    # The padded box actually fed to the classifier, and the displayed class's
-    # index. Both exist so the Grad-CAM window can re-derive the exact same
+    # the padded box actually fed to the classifier, and the displayed class's
+    # index. both exist so the grad-cam window can re-derive the exact same
     # input and explain the class being shown rather than the raw argmax.
     crop_box: tuple[int, int, int, int] | None = None
     class_idx: int = -1
@@ -144,12 +143,12 @@ def run_frame(
                     continue
                 raw_boxes.append((x1, y1, x2, y2, conf))
 
-    # Object identity, and the boxes it contributes on its own.
+    # object identity, and the boxes it contributes on its own.
     matches = recognizer.detect(image) if recognizer is not None else []
     if recognizer is not None and add_unmatched:
-        # A confidently-recognised waste object the TACO detector missed is
-        # still a real item — TACO is litter-tuned and routinely fails on tidy,
-        # well-lit objects. Only *mapped* classes are added; a recognised
+        # a confidently-recognised waste object the taco detector missed is
+        # still a real item — taco is litter-tuned and routinely fails on tidy,
+        # well-lit objects. only *mapped* classes are added; a recognised
         # person or chair contributes nothing rather than being force-fitted
         # into the taxonomy.
         for m in matches:
@@ -175,7 +174,7 @@ def run_frame(
     for (x1, y1, x2, y2, conf), keep_flag in zip(raw_boxes, keep):
         if not keep_flag:
             continue
-        # Classify a padded crop, but keep the tight box for drawing and for
+        # classify a padded crop, but keep the tight box for drawing and for
         # track association — the padded region is context for the model, not
         # a claim about where the object is.
         crop_box = pad_box((x1, y1, x2, y2), w, h, pad_frac)
@@ -242,7 +241,7 @@ def run_frame(
 
 
 # ---------------------------------------------------------------------------
-# Drawing
+# drawing
 # ---------------------------------------------------------------------------
 
 _GREEN = (0, 255, 0)
@@ -280,7 +279,7 @@ def _draw_label(frame, x: int, y: int, lines: list[str], colour) -> None:
     x0 = max(0, min(x, frame.shape[1] - box_w))
 
     cv2.rectangle(frame, (x0, y0), (x0 + box_w, y0 + box_h), colour, -1)
-    # Black text on the bright fills, white on red — keeps contrast readable.
+    # black text on the bright fills, white on red — keeps contrast readable.
     b, g, r = colour
     luma = 0.114 * b + 0.587 * g + 0.299 * r
     text_colour = (0, 0, 0) if luma > 140 else (255, 255, 255)
@@ -297,7 +296,7 @@ def _draw_detection(frame, det: Detection, high: float, mid: float) -> None:
     x1, y1, x2, y2 = det.box
     cv2.rectangle(frame, (x1, y1), (x2, y2), colour, 2)
     material = det.class_name.replace("_", " ").title()
-    # "Banana > Organic" makes the reasoning legible at a glance: what the
+    # "banana > organic" makes the reasoning legible at a glance: what the
     # system thinks the object is, and what it concluded about the material.
     top = f"{det.object_name.title()} > {material}" if det.object_name else material
     lines = [top, f"{det.cls_conf * 100:.1f}%  [{det.decided_by}]"]
@@ -316,7 +315,7 @@ def _draw_hud(frame, text: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Entry points
+# entry points
 # ---------------------------------------------------------------------------
 
 def run_images(cfg: Config, det_ckpt: str, cls_ckpt: str, inputs: list[str]):
@@ -330,7 +329,7 @@ def run_images(cfg: Config, det_ckpt: str, cls_ckpt: str, inputs: list[str]):
     for path in _iter_paths(inputs):
         any_found = True
         image = Image.open(path).convert("RGB")
-        # No stabilizer: separate files are not a temporal sequence.
+        # no stabilizer: separate files are not a temporal sequence.
         dets = run_frame(detector, classifier, tfm, list(class_names), image,
                          device, conf_threshold=conf,
                          containment_thresh=cfg.infer.containment_thresh,
@@ -437,7 +436,7 @@ def run_camera(cfg: Config, det_ckpt: str, cls_ckpt: str, cam_index: int,
                     logger.log(d)
                 _draw_detection(frame, d, ic.colour_high, ic.colour_mid)
 
-            # Second window. Built from the same `dets` produced above, so the
+            # second window. built from the same `dets` produced above, so the
             # two windows can never describe different frames — the heatmap may
             # be a few frames old (and says so), but it always belongs to a
             # detection that really happened, with the label it really had.
@@ -496,7 +495,7 @@ def main(argv: list[str] | None = None) -> int:
                      help="Path to write per-detection CSV log (camera mode only).")
     ap.add_argument("--explain-dir", default="runs/explanations",
                      help="Directory for Grad-CAM explanation snapshots (camera mode only).")
-    # Stability knobs — override the config without editing YAML, so they can
+    # stability knobs — override the config without editing yaml, so they can
     # be swept live during a demo.
     ap.add_argument("--det-conf", type=float, default=None,
                      help="Detector confidence gate (default: config, 0.45).")

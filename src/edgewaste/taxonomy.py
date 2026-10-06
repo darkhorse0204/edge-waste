@@ -42,7 +42,7 @@ class WasteClass:
 
 
 # ---------------------------------------------------------------------------
-# Material families. These are the physical streams a sorter routes to; the
+# material families. these are the physical streams a sorter routes to; the
 # 33 item classes below each belong to exactly one.
 # ---------------------------------------------------------------------------
 FAMILIES: tuple[str, ...] = (
@@ -50,12 +50,12 @@ FAMILIES: tuple[str, ...] = (
     "organic", "styrofoam", "textile", "hazardous",
 )
 
-# Families that must never be routed into a recycling or compost stream.
+# families that must never be routed into a recycling or compost stream.
 HAZARDOUS_FAMILIES: frozenset[str] = frozenset({"hazardous"})
 
 
 # ---------------------------------------------------------------------------
-# The 33-class fine-grained taxonomy. Tuple order defines the classifier
+# the 33-class fine-grained taxonomy. tuple order defines the classifier
 # head's index order and is embedded into every checkpoint.
 # ---------------------------------------------------------------------------
 CLASSES: tuple[WasteClass, ...] = (
@@ -95,7 +95,7 @@ CLASSES: tuple[WasteClass, ...] = (
     WasteClass("eggshells", "Eggshells", "organic"),
     WasteClass("coffee_grounds", "Coffee grounds", "organic"),
     WasteClass("tea_bags", "Tea bags", "organic"),
-    # --- styrofoam (2) — EPS is not processed with other plastics ---
+    # --- styrofoam (2) — eps is not processed with other plastics ---
     WasteClass("styrofoam_cups", "Styrofoam cup", "styrofoam"),
     WasteClass("styrofoam_food_containers", "Styrofoam food container", "styrofoam"),
     # --- textile (2) ---
@@ -111,12 +111,12 @@ CLASSES: tuple[WasteClass, ...] = (
                     "treatment"),
 )
 
-# Ordered canonical class names — this order defines the classifier head indices.
+# ordered canonical class names — this order defines the classifier head indices.
 CLASS_NAMES: tuple[str, ...] = tuple(c.name for c in CLASSES)
 NAME_TO_INDEX: dict[str, int] = {name: i for i, name in enumerate(CLASS_NAMES)}
 NUM_CLASSES: int = len(CLASSES)
 
-# Item class -> material family, and the reverse index.
+# item class -> material family, and the reverse index.
 CLASS_TO_FAMILY: dict[str, str] = {c.name: c.family for c in CLASSES}
 FAMILY_TO_CLASSES: dict[str, tuple[str, ...]] = {
     fam: tuple(c.name for c in CLASSES if c.family == fam) for fam in FAMILIES
@@ -155,29 +155,29 @@ def is_hazardous(name: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Data sources and their raw -> canonical folder mappings.
+# data sources and their raw -> canonical folder mappings.
 #
-# A mapping value of None means "drop this raw class". Any raw folder not
+# a mapping value of none means "drop this raw class". any raw folder not
 # present in a source's `mapping` is treated as an error at ingest time, so
 # new/renamed source folders can't be silently mis-binned.
 #
-# Note on the coarse legacy sources: TrashNet's and TrashBox's plain
-# 'plastic'/'glass'/'metal'/'paper' folders are deliberately dropped. A
+# note on the coarse legacy sources: trashnet's and trashbox's plain
+# 'plastic'/'glass'/'metal'/'paper' folders are deliberately dropped. a
 # folder labelled only 'glass' cannot be assigned to glass_beverage_bottles
 # vs glass_food_jars vs glass_cosmetic_containers without inventing a label,
 # and mixing a coarse 'glass' class alongside the three fine ones would make
 # the class depend on which dataset an image came from rather than on the
-# object. Those sources are kept only for the classes they *can* resolve
-# unambiguously — which for TrashBox is e-waste and medical, the two
+# object. those sources are kept only for the classes they *can* resolve
+# unambiguously — which for trashbox is e-waste and medical, the two
 # hazardous streams nothing else covers.
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class DataSource:
-    key: str  # short id used on the CLI and in provenance records
+    key: str  # short id used on the cli and in provenance records
     title: str  # human description
     kind: str  # "kaggle" (only kind currently supported by the fetch/ingest pipeline)
     locator: str = ""  # kaggle "owner/dataset-slug"
-    # raw class folder (as it appears in the source) -> canonical class or None
+    # raw class folder (as it appears in the source) -> canonical class or none
     mapping: dict[str, str | None] = field(default_factory=dict)
     note: str = ""
 
@@ -188,7 +188,7 @@ RECYCLABLE_HOUSEHOLD = DataSource(
           "(Kaggle: alistairking/recyclable-and-household-waste-classification)",
     kind="kaggle",
     locator="alistairking/recyclable-and-household-waste-classification",
-    # Folder names already match the canonical class names one-for-one.
+    # folder names already match the canonical class names one-for-one.
     mapping={name: name for name in (
         "plastic_water_bottles", "plastic_soda_bottles",
         "plastic_detergent_bottles", "plastic_food_containers",
@@ -217,13 +217,13 @@ TRASHBOX = DataSource(
     kind="kaggle",
     locator="minhle13/trashbox",
     mapping={
-        # Coarse material folders: dropped, see the note above.
+        # coarse material folders: dropped, see the note above.
         "cardboard": None,
         "glass": None,
         "metal": None,
         "paper": None,
         "plastic": None,
-        # The two hazardous streams no other source covers.
+        # the two hazardous streams no other source covers.
         "e-waste": "e_waste",
         "medical": "medical",
     },
@@ -237,7 +237,7 @@ GARBAGE_12 = DataSource(
     kind="kaggle",
     locator="mostafaabla/garbage-classification",
     mapping={
-        # Coarse material folders: dropped, see the note above.
+        # coarse material folders: dropped, see the note above.
         "paper": None,
         "cardboard": None,
         "metal": None,
@@ -246,7 +246,7 @@ GARBAGE_12 = DataSource(
         "brown-glass": None,
         "white-glass": None,
         "trash": None,
-        # Resolvable classes.
+        # resolvable classes.
         "battery": "battery",
         "clothes": "clothing",
         "shoes": "shoes",
@@ -262,17 +262,17 @@ SOURCES: dict[str, DataSource] = {
 }
 
 # ---------------------------------------------------------------------------
-# TrashNet (asdasdasasdas/garbage-classification) is no longer wired in: all
+# trashnet (asdasdasasdas/garbage-classification) is no longer wired in: all
 # six of its folders are coarse material labels with no unambiguous
 # fine-grained target, so under this taxonomy it would contribute nothing.
-# It remains the right source if the project ever reverts to a flat
+# it remains the right source if the project ever reverts to a flat
 # material-only taxonomy.
 #
-# WaRP (parohod/warp-waste-recycling-plant-dataset) IS now on Kaggle — the
+# warp (parohod/warp-waste-recycling-plant-dataset) is now on kaggle — the
 # long-standing "no confirmed mirror" gap is closed. 28 classes of real
 # recycling-plant imagery with overlap, deformation and poor lighting; the
-# natural next addition for a robustness/hard-case evaluation, at 845 MB.
-# Not wired in yet: its classes are mostly fine-grained plastic-bottle
+# natural next addition for a robustness/hard-case evaluation, at 845 mb.
+# not wired in yet: its classes are mostly fine-grained plastic-bottle
 # variants that would need their own mapping decisions.
 # ---------------------------------------------------------------------------
 WARP_NOTE = (

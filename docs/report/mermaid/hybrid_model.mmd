@@ -1,0 +1,16 @@
+%% hybrid_model.mmd - mermaid source of a figure in the project report
+flowchart TB
+    IMG["Input image<br/>224 x 224 x 3"]
+    CNX["ConvNeXt-Tiny<br/>(convolutional stream)<br/>768 features"]
+    VIT["Vision Transformer Small, patch 16<br/>(attention stream)<br/>384 features"]
+    P1["Linear, LayerNorm, GELU<br/>512 features"]
+    P2["Linear, LayerNorm, GELU<br/>512 features"]
+    ATT["Attention fusion<br/>score = W2 GELU(W1 f + b1) + b2<br/>softmax over the two streams"]
+    FUS["Weighted concatenation<br/>1024 features"]
+    HEAD["Classifier head<br/>Dropout 0.2, Linear 1024 to 512, GELU,<br/>Dropout 0.2, Linear 512 to 33"]
+    OUT["Softmax over 33 item classes<br/>family probability = sum over the family's items"]
+    IMG --> CNX --> P1 --> ATT
+    IMG --> VIT --> P2 --> ATT
+    ATT --> FUS --> HEAD --> OUT
+    style ATT fill:#dae8fc,stroke:#6c8ebf
+    style OUT fill:#d5e8d4,stroke:#82b366

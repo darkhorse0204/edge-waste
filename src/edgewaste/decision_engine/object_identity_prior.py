@@ -34,19 +34,19 @@ import torch
 
 from edgewaste.taxonomy import CLASS_NAMES, FAMILY_TO_CLASSES, is_hazardous
 
-# How much to down-weight a material the object identity makes implausible.
-# Not zero: see the module docstring on hard-masking.
+# how much to down-weight a material the object identity makes implausible.
+# not zero: see the module docstring on hard-masking.
 IMPLAUSIBLE_WEIGHT = 0.15
 
-# object class (as the 18-class TACO detector names it) -> plausible materials.
-# An empty set means "uninformative": every material stays at weight 1.0.
-# Entries may name either a material *family* (expanded to all its item
+# object class (as the 18-class taco detector names it) -> plausible materials.
+# an empty set means "uninformative": every material stays at weight 1.0.
+# entries may name either a material *family* (expanded to all its item
 # classes) or specific item classes, whichever the object identity actually
-# pins down. 'Straw' names one item exactly; 'Can' names a family.
+# pins down. 'straw' names one item exactly; 'can' names a family.
 OBJECT_MATERIAL_PRIOR: dict[str, set[str]] = {
     "Aluminium foil": {"metal"},
     "Bottle cap": {"plastic_cup_lids", "metal"},
-    # A bottle silhouette is genuinely ambiguous between plastic and glass —
+    # a bottle silhouette is genuinely ambiguous between plastic and glass —
     # exactly the confusion the project's own problem statement calls out.
     "Bottle": {"plastic_water_bottles", "plastic_soda_bottles",
                "plastic_detergent_bottles", "glass_beverage_bottles"},
@@ -63,15 +63,15 @@ OBJECT_MATERIAL_PRIOR: dict[str, set[str]] = {
     "Plastic container": {"plastic_food_containers", "plastic_detergent_bottles"},
     "Pop tab": {"metal"},
     "Straw": {"plastic_straws"},
-    # Expanded polystyrene: its own family, not processed with other plastics.
+    # expanded polystyrene: its own family, not processed with other plastics.
     "Styrofoam piece": {"styrofoam"},
     "Unlabeled litter": set(),
 }
 
-# The detector is trained on outdoor litter and has no object class for the
-# hazardous stream. A battery or syringe therefore arrives as 'Other
-# litter'/'Unlabeled litter' — both uninformative, so the prior stays uniform
-# and the classifier's hazardous call survives untouched. Belt and braces:
+# the detector is trained on outdoor litter and has no object class for the
+# hazardous stream. a battery or syringe therefore arrives as 'other
+# litter'/'unlabeled litter' — both uninformative, so the prior stays uniform
+# and the classifier's hazardous call survives untouched. belt and braces:
 # hazardous classes are additionally exempted below, so the prior can never
 # talk the classifier *out of* flagging a hazard.
 HAZARD_SAFE_MATERIALS: frozenset[str] = frozenset(
@@ -98,8 +98,8 @@ def prior_vector(object_class: str, class_names: list[str] | tuple[str, ...] = C
         return torch.ones(len(class_names))
     plausible = _expand(entries)
     return torch.tensor([
-        # Hazardous materials are never down-weighted: the prior may not
-        # suppress a hazard flag (see HAZARD_SAFE_MATERIALS).
+        # hazardous materials are never down-weighted: the prior may not
+        # suppress a hazard flag (see hazard_safe_materials).
         1.0 if (name in plausible or name in HAZARD_SAFE_MATERIALS)
         else IMPLAUSIBLE_WEIGHT
         for name in class_names

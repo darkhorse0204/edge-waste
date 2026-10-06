@@ -1,0 +1,33 @@
+%% hardware.mmd - mermaid source of a figure in the project report
+flowchart LR
+    subgraph IN["Sensing (planned)"]
+        CAM["Camera module"]
+        MO["Capacitive moisture sensor"]
+        GA["Gas sensor (MQ-135 type)"]
+        ADC["Analogue-to-digital converter"]
+        MO --> ADC
+        GA --> ADC
+    end
+    subgraph EDGE["Edge computer (planned Raspberry Pi 5)"]
+        DET["Object detector (ONNX)"]
+        CLS["Material classifier (ONNX)"]
+        DEC["Decision engine and logger"]
+        FLC["Federated learning client"]
+        DET --> CLS --> DEC
+        FLC -.-> CLS
+    end
+    subgraph OUT["Actuation (planned)"]
+        DRV["Servo and motor driver"]
+        CON["Conveyor belt"]
+        DIV["Diverter servo"]
+        BIN["Nine bins: eight material bins and one hazardous bin"]
+        DRV --> CON
+        DRV --> DIV --> BIN
+    end
+    CAM --> DET
+    ADC --> DEC
+    DEC --> DRV
+    FLC <--> SRV["Aggregation server<br/>(model parameters only)"]
+    style IN fill:#f5f5f5,stroke:#999
+    style EDGE fill:#eaf1fb,stroke:#6c8ebf
+    style OUT fill:#fdf1e7,stroke:#c9a063

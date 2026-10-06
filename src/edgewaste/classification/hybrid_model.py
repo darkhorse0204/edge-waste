@@ -42,12 +42,12 @@ class AttentionFusion(nn.Module):
         )
 
     def forward(self, feats: list[torch.Tensor]) -> torch.Tensor:
-        # feats: list of [B, dim]; stack to [B, N, dim]
+        # feats: list of [b, dim]; stack to [b, n, dim]
         stacked = torch.stack(feats, dim=1)
-        scores = self.score(stacked)  # [B, N, 1]
+        scores = self.score(stacked)  # [b, n, 1]
         weights = torch.softmax(scores, dim=1)  # attention over streams
-        weighted = stacked * weights  # [B, N, dim]
-        # concatenate weighted streams -> [B, N*dim]
+        weighted = stacked * weights  # [b, n, dim]
+        # concatenate weighted streams -> [b, n*dim]
         return weighted.flatten(start_dim=1), weights.squeeze(-1)
 
 
@@ -72,7 +72,7 @@ class HybridConvNeXtViT(nn.Module):
         cnx_dim = self.convnext.num_features
         vit_dim = self.vit.num_features
 
-        # Project each backbone to a common dimension for fusion.
+        # project each backbone to a common dimension for fusion.
         self.proj_cnx = nn.Sequential(
             nn.Linear(cnx_dim, fusion_dim), nn.LayerNorm(fusion_dim), nn.GELU())
         self.proj_vit = nn.Sequential(
@@ -80,7 +80,7 @@ class HybridConvNeXtViT(nn.Module):
 
         self.fusion = AttentionFusion(fusion_dim, num_streams=2)
 
-        # Classifier head over the fused (2 * fusion_dim) vector.
+        # classifier head over the fused (2 * fusion_dim) vector.
         self.head = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(2 * fusion_dim, fusion_dim),

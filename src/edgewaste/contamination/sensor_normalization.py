@@ -20,9 +20,9 @@ class CalibrationAnchors:
     saturated reference readings) — do not recompute at runtime."""
     m_dry: float    # moisture_raw on a genuinely dry reference item
     m_wet: float    # moisture_raw on a genuinely saturated reference item
-    r0: float       # MQ-135 clean-air baseline resistance (per-unit, mandatory)
-    l_min: float    # -log(Rs/R0) in clean air
-    l_max: float    # -log(Rs/R0) near a heavily contaminated reference
+    r0: float       # mq-135 clean-air baseline resistance (per-unit, mandatory)
+    l_min: float    # -log(rs/r0) in clean air
+    l_max: float    # -log(rs/r0) near a heavily contaminated reference
 
 
 def normalize_moisture(moisture_raw: float, anchors: CalibrationAnchors) -> float:

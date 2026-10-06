@@ -24,15 +24,35 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
 def _collect(processed_dir: Path) -> dict[str, list[Path]]:
+    # provenance.csv is rewritten by every ingest run, so it lists exactly the
+    # images that run produced. images from an older run (same photo under an
+    # older file name) sit in the folder but are not listed; splitting them
+    # too would put the same photo into train and test.
+    prov = processed_dir / "provenance.csv"
+    current: set[tuple[str, str]] | None = None
+    if prov.exists():
+        with prov.open(encoding="utf-8") as fh:
+            current = {(r["canonical_class"], r["dest_name"]) for r in csv.DictReader(fh)}
+
     by_class: dict[str, list[Path]] = {}
+    stale = 0
     for cls in CLASS_NAMES:
         d = processed_dir / cls
         if not d.exists():
             continue
-        files = [p for p in sorted(d.iterdir())
-                 if p.is_file() and p.suffix.lower() in IMAGE_EXTS]
+        files = []
+        for p in sorted(d.iterdir()):
+            if not (p.is_file() and p.suffix.lower() in IMAGE_EXTS):
+                continue
+            if current is not None and (cls, p.name) not in current:
+                stale += 1
+                continue
+            files.append(p)
         if files:
             by_class[cls] = files
+    if stale:
+        print(f"[warn] ignored {stale} stale image(s) in {processed_dir} not produced by "
+              f"the latest ingest (older file names of the same photos)")
     return by_class
 
 
@@ -54,12 +74,12 @@ def build_splits(cfg: Config) -> dict[str, int]:
         idx = class_index(cls)
         n = len(files)
         if n < 3:
-            # Too few to stratify into 3 splits — put all in train.
+            # too few to stratify into 3 splits — put all in train.
             for f in files:
                 rows.append((str(f), idx, cls, "train"))
                 split_counts["train"] += 1
             continue
-        # First carve out test, then val from the remainder.
+        # first carve out test, then val from the remainder.
         train_val, test = train_test_split(
             files, test_size=test_f, random_state=seed, shuffle=True)
         rel_val = val_f / (1.0 - test_f)

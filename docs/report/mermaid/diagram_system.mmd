@@ -1,0 +1,41 @@
+%% diagram_system.mmd - mermaid source of a figure in the project report (same diagram as in the invention disclosure draft)
+flowchart TD
+    CAM[Camera or video frame]
+    DET[Object detector\nfinds the item and names the object]
+    CLS[Material classifier\nConvNeXt and Vision Transformer\nwith attention fusion]
+    FUSE{Object-identity cross-check\nhazards are exempt\nweighted by confidence}
+    UNC[Uncertainty estimator\nMonte Carlo dropout entropy]
+    CAL[("Per-family thresholds\ncalibrated on held-out data\nstricter level for hazardous")]
+    CONF[Calibrated family-set router\nset of plausible material families\nhazardous in set = kept out of recycling]
+    MOIST[Moisture sensor]
+    GAS[Gas sensor\nvolatile organic compounds]
+    OCI[Organic Contamination Index module\nthree models\nkeeps working if a sensor stops]
+    DEC{Decision engine}
+    R1[[Hazardous pathway]]
+    R2[[Priority manual review]]
+    R3[[Contaminated reject]]
+    R4[[Material-family bin]]
+
+    CAM --> DET
+    CAM --> CLS
+    DET -- object identity and confidence --> FUSE
+    CLS -- raw material probabilities --> FUSE
+    FUSE -- fused material probabilities --> UNC
+    FUSE -- fused family totals --> CONF
+    CAL --> CONF
+    MOIST --> OCI
+    GAS --> OCI
+    UNC -- uncertainty --> DEC
+    CONF -- family set --> DEC
+    OCI -- contamination score --> DEC
+    DEC -->|hazard only, confident| R1
+    DEC -->|hazard in set, unsure| R2
+    DEC -->|contamination high| R3
+    DEC -->|one family, confident| R4
+
+    style FUSE fill:#dae8fc,stroke:#6c8ebf
+    style CONF fill:#ffe6cc,stroke:#d79b00
+    style CAL fill:#ffe6cc,stroke:#d79b00
+    style DEC fill:#d5e8d4,stroke:#82b366
+    style R1 fill:#f8cecc,stroke:#b85450
+    style R2 fill:#fff2cc,stroke:#d6b656

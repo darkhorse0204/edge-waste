@@ -1,0 +1,20 @@
+%% sequence.mmd - mermaid source of a figure in the project report
+sequenceDiagram
+    autonumber
+    participant C as Camera
+    participant D as Object detector
+    participant M as Material classifier
+    participant X as Cross-check
+    participant U as Uncertainty and family sets
+    participant S as Contamination sensors
+    participant E as Decision engine
+    participant A as Actuator and log
+    C->>D: frame
+    D->>M: box and cropped item
+    D->>X: object name and confidence
+    M->>X: 33 class probabilities
+    X->>U: fused probabilities (hazards untouched)
+    U->>E: uncertainty and set of plausible families
+    S->>E: moisture and gas scores (contamination index)
+    E->>A: hazardous bin, priority review, contamination reject or family bin
+    A-->>C: next item

@@ -1,0 +1,34 @@
+{
+ "picked_wrong_top1": 4,
+ "n": 33,
+ "wrong": [
+  {
+   "true": "plastic_soda_bottles",
+   "model": "plastic_water_bottles",
+   "same_family": true,
+   "action": "AUTO: plastic bin"
+  },
+  {
+   "true": "cardboard_boxes",
+   "model": "cardboard_packaging",
+   "same_family": true,
+   "action": "AUTO: cardboard bin"
+  },
+  {
+   "true": "cardboard_packaging",
+   "model": "cardboard_boxes",
+   "same_family": true,
+   "action": "AUTO: cardboard bin"
+  },
+  {
+   "true": "aluminum_soda_cans",
+   "model": "plastic_straws",
+   "same_family": false,
+   "action": "MANUAL REVIEW"
+  }
+ ],
+ "f1_min": 0.5588235294117647,
+ "f1_max": 0.9736842105263158,
+ "f1_min_class": "cardboard_packaging",
+ "f1_max_class": "coffee_grounds"
+}

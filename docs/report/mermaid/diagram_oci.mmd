@@ -1,0 +1,25 @@
+%% diagram_oci.mmd - mermaid source of a figure in the project report (same diagram as in the invention disclosure draft)
+flowchart LR
+    M[Moisture sensor\nraw reading]
+    G[Gas sensor\nresistance Rs]
+    NM["Scale with fixed anchors\nf_m = clip((m_raw - m_dry)/(m_wet - m_dry), 0, 1)"]
+    NG["Scale with fixed anchors\nf_g = clip((-ln(Rs/R0) - l_min)/(l_max - l_min), 0, 1)"]
+    AVAIL{Which channels\nare available?}
+    COMBO["Combined model\nsigmoid(b0 + b1 f_m + b2 f_g + b3 f_m f_g)"]
+    MONLY["Moisture-only model\nsigmoid(b0_m + b1_m f_m)"]
+    GONLY["Gas-only model\nsigmoid(b0_g + b1_g f_g)"]
+    NONE["Both channels lost:\nsend to manual review"]
+    SCORE[Contamination score]
+    THRESH["Threshold with the lowest false positive rate\nwhile the true positive rate stays at or above 0.95"]
+
+    M --> NM --> AVAIL
+    G --> NG --> AVAIL
+    AVAIL -- moisture and gas --> COMBO --> SCORE
+    AVAIL -- moisture only --> MONLY --> SCORE
+    AVAIL -- gas only --> GONLY --> SCORE
+    AVAIL -- neither --> NONE
+    SCORE --> THRESH
+
+    style AVAIL fill:#dae8fc,stroke:#6c8ebf
+    style NONE fill:#f8cecc,stroke:#b85450
+    style SCORE fill:#d5e8d4,stroke:#82b366

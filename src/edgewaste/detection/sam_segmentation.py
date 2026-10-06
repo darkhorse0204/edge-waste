@@ -33,7 +33,7 @@ from PIL import Image
 
 @dataclass
 class SegmentResult:
-    mask: np.ndarray  # HxW bool, True where the item is
+    mask: np.ndarray  # hxw bool, true where the item is
     mask_area_px: int
     box_area_px: int
     fill_ratio: float  # mask_area / box_area — how much of the box the object actually fills
@@ -60,7 +60,7 @@ def segment_box(sam_model, image: Image.Image, box: tuple[int, int, int, int]) -
     box_area = max(0, x2 - x1) * max(0, y2 - y1)
 
     if result.masks is None or len(result.masks.data) == 0:
-        # SAM found nothing for this box (degenerate box, or a genuinely
+        # sam found nothing for this box (degenerate box, or a genuinely
         # empty region) — fall back to the box itself as a "mask" so callers
         # never have to special-case a missing result.
         mask = np.zeros(rgb.shape[:2], dtype=bool)

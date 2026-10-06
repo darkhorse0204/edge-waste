@@ -1,0 +1,38 @@
+%% esp32_wiring.mmd - wiring diagram of the esp32 prototype (hardware guide)
+flowchart LR
+    subgraph ESP["ESP32 DevKit (USB powered)"]
+        V33["3V3"]
+        VIN["VIN (5 V)"]
+        GND["GND"]
+        G4["GPIO4"]
+        G34["GPIO34"]
+        G18["GPIO18"]
+        BOOT["BOOT button (GPIO0)"]
+    end
+    subgraph DHT["DHT22"]
+        D1["VCC"]
+        D2["DATA"]
+        D3["GND"]
+    end
+    subgraph MQ["MQ-135 module"]
+        M1["VCC"]
+        M2["AO"]
+        M3["GND"]
+    end
+    subgraph SV["Servo SG90"]
+        S1["red"]
+        S2["signal (orange)"]
+        S3["brown"]
+    end
+    R1["10k resistor"]
+    R2["10k resistor"]
+    V33 --> D1
+    G4 --- D2
+    GND --- D3
+    VIN --> M1
+    GND --- M3
+    M2 --> R1 --> G34
+    G34 --> R2 --> GND
+    VIN --> S1
+    G18 --> S2
+    GND --- S3

@@ -1,0 +1,28 @@
+%% diagram_hazard_gate.mmd - mermaid source of a figure in the project report (same diagram as in the invention disclosure draft)
+flowchart TD
+    START([Fused material prediction and uncertainty])
+    ISHAZ{Is the predicted class\nhazardous?}
+    CONF{Is uncertainty\nbelow the threshold?}
+    ACT1[["Send to the hazardous pathway\n(automatic action)"]]
+    ACT2[["Priority manual review\nnever automatic, never recycled"]]
+    NORMU{Is uncertainty\nbelow the threshold?}
+    OCICHK{Is the contamination score high\nand the family not organic?}
+    ACT3[["Contaminated-reject pathway"]]
+    ACT4[["Route to the\nmaterial-family bin"]]
+    ACT5[["Manual review\n(ordinary uncertainty)"]]
+
+    START --> ISHAZ
+    ISHAZ -- yes --> CONF
+    CONF -- yes, confident --> ACT1
+    CONF -- no, unsure --> ACT2
+    ISHAZ -- no --> NORMU
+    NORMU -- no, unsure --> ACT5
+    NORMU -- yes, confident --> OCICHK
+    OCICHK -- yes --> ACT3
+    OCICHK -- no --> ACT4
+
+    style ISHAZ fill:#dae8fc,stroke:#6c8ebf
+    style ACT1 fill:#f8cecc,stroke:#b85450
+    style ACT2 fill:#fff2cc,stroke:#d6b656
+    style ACT3 fill:#ffe6cc,stroke:#d79b00
+    style ACT4 fill:#d5e8d4,stroke:#82b366

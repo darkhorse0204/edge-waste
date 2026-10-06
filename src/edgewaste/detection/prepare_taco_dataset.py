@@ -26,7 +26,7 @@ from pathlib import Path
 from edgewaste.config import Config, DetectConfig
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-# Sidecar .txt files that are metadata, not per-image YOLO labels.
+# sidecar .txt files that are metadata, not per-image yolo labels.
 NON_LABEL_TXT_NAMES = {"classes.txt", "readme.txt", "notes.txt", "data.txt"}
 
 

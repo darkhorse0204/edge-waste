@@ -22,7 +22,7 @@ from edgewaste.classification.run_inference import load_for_inference
 
 
 def export_classifier(ckpt: str, cfg: Config, out_path: str, atol: float = 1e-3) -> Path:
-    device = torch.device("cpu")  # export from CPU for a portable graph
+    device = torch.device("cpu")  # export from cpu for a portable graph
     model, class_names, _ = load_for_inference(ckpt, cfg, device)
     model.eval()
 

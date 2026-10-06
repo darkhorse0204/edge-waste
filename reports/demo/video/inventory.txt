@@ -1,0 +1,36 @@
+LITTER INVENTORY REPORT
+==============================================
+Source           : runs/_testvideo/survey_test.mp4
+Generated        : 2026-10-01T11:49:45
+Frames processed : 240
+Unique items     : 16   (de-duplicated across frames by track ID)
+Flagged contaminated (OCI >= 0.50): 0
+Material corrected by identity prior: 5
+Unresolved object/material contradictions: 4
+Hazard-suspected but too uncertain to act on (priority review): 12
+
+BY OBJECT TYPE
+----------------------------------------------
+  Cup                              6
+  Plastic bag - wrapper            4
+  Can                              2
+  Carton                           2
+  Bottle cap                       1
+  Other litter                     1
+
+BY MATERIAL
+----------------------------------------------
+  medical                         10
+  cardboard_packaging              4
+  e_waste                          2
+
+BY ROUTING DECISION
+----------------------------------------------
+  manual_review                   16
+
+OBJECT/MATERIAL CONTRADICTIONS (routed to manual review)
+----------------------------------------------
+  #1     CONTRADICTION: 'Cup' implies ['paper_cups', 'plastic_cup_lids', 'styrofoam_cups'], classifier said 'cardboard_packaging'
+  #13    CONTRADICTION: 'Cup' implies ['paper_cups', 'plastic_cup_lids', 'styrofoam_cups'], classifier said 'cardboard_packaging'
+  #15    CONTRADICTION: 'Cup' implies ['paper_cups', 'plastic_cup_lids', 'styrofoam_cups'], classifier said 'cardboard_packaging'
+  #16    CONTRADICTION: 'Can' implies ['metal'], classifier said 'cardboard_packaging'

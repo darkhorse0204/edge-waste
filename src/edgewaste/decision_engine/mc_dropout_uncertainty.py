@@ -46,12 +46,12 @@ def mc_dropout_predict(
     for _ in range(n_passes):
         logits = model(x)
         probs_stack.append(F.softmax(logits, dim=1))
-    probs = torch.stack(probs_stack, dim=0)  # [N, B, C]
-    mean_probs = probs.mean(dim=0)  # [B, C]
+    probs = torch.stack(probs_stack, dim=0)  # [n, b, c]
+    mean_probs = probs.mean(dim=0)  # [b, c]
 
     num_classes = mean_probs.shape[-1]
     eps = 1e-12
-    entropy = -(mean_probs * (mean_probs + eps).log()).sum(dim=-1)  # [B]
+    entropy = -(mean_probs * (mean_probs + eps).log()).sum(dim=-1)  # [b]
     uncertainty = entropy / math.log(num_classes)
 
     model.train(was_training)

@@ -18,7 +18,7 @@ class PredictionLogger:
         self._writer = csv.writer(self._file)
         if is_new:
             # raw_* are the pre-smoothing, single-frame values; class_name /
-            # cls_conf are what was displayed. Logging both means the flicker
+            # cls_conf are what was displayed. logging both means the flicker
             # reduction can be measured after the fact — count label changes
             # in raw_class_name vs class_name over the same session.
             self._writer.writerow([
@@ -32,7 +32,7 @@ class PredictionLogger:
     def log(self, det) -> None:
         x1, y1, x2, y2 = det.box
         a_cnx, a_vit = det.attn if det.attn else ("", "")
-        # getattr defaults keep this working with any Detection that predates
+        # getattr defaults keep this working with any detection that predates
         # the stability fields.
         self._writer.writerow([
             time.time(), getattr(det, "track_id", -1),

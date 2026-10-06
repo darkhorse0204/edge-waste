@@ -30,7 +30,7 @@ y_scores = np.array([compute_oci(coeffs, m, g) for m, g in zip(f_m, f_g)])
 threshold_info = select_threshold(y, y_scores, min_sensitivity=0.95)
 print("Threshold selection:", threshold_info)
 
-# Sensor-dropout check — same items, moisture only vs. gas only vs. both.
+# sensor-dropout check — same items, moisture only vs. gas only vs. both.
 print("Sample with both sensors:  ", compute_oci(coeffs, f_m[0], f_g[0]))
 print("Sample, moisture only:     ", compute_oci(coeffs, f_m[0], None))
 print("Sample, gas only:          ", compute_oci(coeffs, None, f_g[0]))

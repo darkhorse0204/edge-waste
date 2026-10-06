@@ -1,0 +1,49 @@
+%% classes.mmd - mermaid source of a figure in the project report
+classDiagram
+    class Config {
+        +DataConfig data
+        +ModelConfig model
+        +TrainConfig train
+        +load(path)
+    }
+    class WasteDataset {
+        +label_counts()
+        +class_weights()
+        +sampler_weights()
+    }
+    class AttentionFusion {
+        +forward(features)
+    }
+    class HybridConvNeXtViT {
+        +forward(x, return_attn)
+        +feature_vector(x)
+    }
+    class OCIModel {
+        +weights
+        +threshold
+    }
+    class CalibrationAnchors {
+        +m_dry
+        +m_wet
+        +l_min
+        +l_max
+    }
+    class ConformalRouting {
+        +family_matrix()
+        +calibrate()
+        +prediction_sets()
+    }
+    class IdentityPrior {
+        +apply_identity_prior()
+        +is_consistent()
+    }
+    class RoutingRules {
+        +decide()
+    }
+    Config --> WasteDataset : reads manifest
+    Config --> HybridConvNeXtViT : builds
+    HybridConvNeXtViT *-- AttentionFusion
+    RoutingRules ..> ConformalRouting : uses sets
+    RoutingRules ..> IdentityPrior : uses
+    RoutingRules ..> OCIModel : uses
+    OCIModel ..> CalibrationAnchors : scales readings

@@ -50,7 +50,7 @@ def download_source(source: DataSource, downloads_dir: Path) -> bool:
         return False
     dest = downloads_dir / source.key
     dest.mkdir(parents=True, exist_ok=True)
-    # Skip if already populated.
+    # skip if already populated.
     if any(dest.iterdir()):
         print(f"  [have] {source.key}: already present at {dest}")
         return True

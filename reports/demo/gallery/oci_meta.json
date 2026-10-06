@@ -1,0 +1,10 @@
+{
+ "sensitivity": 0.9666666666666667,
+ "false_positive_rate": 0.9333333333333333,
+ "n_contaminated": 30,
+ "thresholds": {
+  "both": 0.28322891485827034,
+  "moisture_only": 0.3130213759263721,
+  "gas_only": 0.33601350574580197
+ }
+}

@@ -1,0 +1,28 @@
+%% diagram_conformal.mmd - mermaid source of a figure in the project report (same diagram as in the invention disclosure draft)
+flowchart TD
+    P["Item class probabilities\n33 fine-grained classes"]
+    M["Add up the probabilities of the\nitems in each family\nto get a family total"]
+    CAL[("Per-family thresholds q_f\ncalibrated on held-out data\nstricter level for hazardous\nholds with chosen confidence")]
+    SET["Set of plausible families\nfamilies whose total passes their threshold"]
+    HQ{Is hazardous in the set?}
+    HS{"Is hazardous the only family\nand uncertainty below the threshold?"}
+    NS{"Is there exactly one family\nand uncertainty below the threshold?"}
+    A1[["Hazardous diversion"]]
+    A2[["Priority manual review\nkept out of recycling"]]
+    A3[["Automatic routing to the family bin"]]
+    A4[["Manual review\n(mixed or empty set)"]]
+
+    P --> M --> SET
+    CAL --> SET
+    SET --> HQ
+    HQ -- yes --> HS
+    HS -- yes --> A1
+    HS -- no --> A2
+    HQ -- no --> NS
+    NS -- yes --> A3
+    NS -- no --> A4
+
+    style CAL fill:#dae8fc,stroke:#6c8ebf
+    style A1 fill:#f8cecc,stroke:#b85450
+    style A2 fill:#fff2cc,stroke:#d6b656
+    style A3 fill:#d5e8d4,stroke:#82b366

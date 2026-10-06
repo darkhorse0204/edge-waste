@@ -1,0 +1,21 @@
+%% usecase.mmd - mermaid source of a figure in the project report
+flowchart LR
+    OP(["Operator"])
+    MA(["Maintainer"])
+    FAC(["Facility manager"])
+    subgraph SYS["Waste sorting unit"]
+        U1["Sort an item automatically"]
+        U2["Review an item flagged for manual review"]
+        U3["Set the hazard limit and review budget"]
+        U4["Recalibrate thresholds for a new site"]
+        U5["Inspect an explanation of a decision"]
+        U6["Run a litter survey on video"]
+        U7["Join a federated learning round"]
+    end
+    OP --> U1
+    OP --> U2
+    OP --> U5
+    FAC --> U3
+    FAC --> U6
+    MA --> U4
+    MA --> U7

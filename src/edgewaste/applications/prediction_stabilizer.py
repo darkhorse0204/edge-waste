@@ -21,7 +21,7 @@ invisible; with several items each keeps its own independent history.
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -48,7 +48,7 @@ class StableResult:
     """One track's smoothed verdict for the current frame."""
 
     track_id: int
-    class_idx: int | None  # None -> below the confidence gate ("unknown")
+    class_idx: int | None  # none -> below the confidence gate ("unknown")
     confidence: float  # window-averaged probability of the reported class
     votes: int  # frames in the window whose argmax agrees with the verdict
     window: int  # frames currently held (< history during warm-up)
@@ -60,8 +60,8 @@ class _Track:
     box: Box
     history: deque[np.ndarray]
     last_frame: int
-    # Currently displayed class, kept across frames so `switch_margin` has an
-    # incumbent to defend. Deliberately NOT reset when the confidence gate
+    # currently displayed class, kept across frames so `switch_margin` has an
+    # incumbent to defend. deliberately not reset when the confidence gate
     # reports "unknown": a brief dip below threshold shouldn't let the label
     # jump to a different class on the way back up.
     shown_idx: int | None = None
@@ -142,11 +142,11 @@ class PredictionStabilizer:
         ``boxes[i]`` and ``probs[i]`` describe the same detection. Results come
         back in the same order as the inputs.
         """
-        # Drop tracks that haven't been seen recently.
+        # drop tracks that haven't been seen recently.
         self._tracks = [t for t in self._tracks
                         if frame_idx - t.last_frame <= self.max_age]
 
-        # Greedy IoU association: strongest overlaps claim their track first,
+        # greedy iou association: strongest overlaps claim their track first,
         # so a marginal 0.31 match can't steal a track from a 0.9 match.
         candidates = []
         for det_i, box in enumerate(boxes):
@@ -192,8 +192,8 @@ class PredictionStabilizer:
         else:
             idx = int(mean_probs.argmax())
 
-        # Hysteresis: defend the incumbent unless the challenger clears it by
-        # `switch_margin`. Compared in averaged-probability space in both modes
+        # hysteresis: defend the incumbent unless the challenger clears it by
+        # `switch_margin`. compared in averaged-probability space in both modes
         # so the margin means the same thing either way.
         if track.shown_idx is not None and idx != track.shown_idx:
             if mean_probs[idx] < mean_probs[track.shown_idx] + self.switch_margin:

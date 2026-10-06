@@ -49,10 +49,41 @@ def _load_model(ckpt_path: Path, cfg: Config, device):
 
 
 @torch.no_grad()
+def _split_matches_training(model, ckpt_path: Path, cfg: Config, device) -> bool:
+    """Guard against the leaky-split trap. The checkpoint stores the validation
+    accuracy measured at training time (fp32, no augmentation). Re-scoring the
+    same checkpoint on this manifest's validation split must reproduce it; if
+    it does not, the manifest's splits differ from the training machine's, and
+    any 'test' score would include images the model trained on."""
+    if getattr(cfg.train, "skip_split_check", False):
+        return True
+    recorded = torch.load(ckpt_path, map_location="cpu", weights_only=False).get("metric")
+    if recorded is None:
+        return True
+    ds = WasteDataset(cfg.data.manifest, "val", cfg.model.image_size, train=False)
+    correct = 0
+    for x, y in DataLoader(ds, batch_size=cfg.train.batch_size, shuffle=False,
+                           num_workers=cfg.train.num_workers):
+        correct += (model(x.to(device)).argmax(1).cpu() == y).sum().item()
+    now = correct / len(ds)
+    ok = abs(now - recorded) < 0.003
+    print(f"split check: val accuracy recorded at training {recorded:.4f}, on this manifest {now:.4f} -> "
+          f"{'same split' if ok else 'DIFFERENT SPLIT'}")
+    return ok
+
+
+@torch.no_grad()
 def evaluate(cfg: Config, ckpt: str, split: str = "test") -> dict:
     device = pick_device()
     ckpt_path = Path(ckpt)
     model, class_names = _load_model(ckpt_path, cfg, device)
+
+    if not _split_matches_training(model, ckpt_path, cfg, device):
+        raise SystemExit(
+            "STOPPED: this manifest is not the split the checkpoint was trained on, so the test "
+            "images would include training images and the score would be inflated. "
+            "Use the manifest from the training machine (e.g. copy data/splits.csv from Colab's Drive "
+            "and pass --manifest), or pass --skip-split-check if you really mean it.")
 
     ds = WasteDataset(cfg.data.manifest, split, cfg.model.image_size, train=False)
     loader = DataLoader(ds, batch_size=cfg.train.batch_size, shuffle=False,
@@ -98,7 +129,7 @@ def evaluate(cfg: Config, ckpt: str, split: str = "test") -> dict:
         "hazardous": hazard_metrics,
         "num_samples": int(len(y_true)),
         "classes_present": target_names,
-        # Kept at the top level for backwards compatibility with older
+        # kept at the top level for backwards compatibility with older
         # tooling that reads metrics_test.json expecting a flat 'accuracy'.
         "accuracy": acc,
     }
@@ -152,7 +183,7 @@ def _hazard_recall(y_true, y_pred, class_names) -> dict:
     for pred in y_pred[mask][~np.isin(y_pred[mask], list(hazard_idx))]:
         missed_as[class_names[int(pred)]] = missed_as.get(class_names[int(pred)], 0) + 1
 
-    print(f"=== Hazardous stream ===")
+    print("=== Hazardous stream ===")
     print(f"recall: {recall:.4f}  ({caught}/{n_true} hazardous items flagged)")
     if missed_as:
         print("  missed items predicted as: "
@@ -192,10 +223,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--manifest", default=None,
                     help="split manifest to score against (default: data.manifest from the config); "
                          "use data/splits_colab_reconstructed.csv for the Colab-trained checkpoint")
+    ap.add_argument("--skip-split-check", action="store_true",
+                    help="do not verify that the manifest matches the split the checkpoint was trained on")
     args = ap.parse_args(argv)
     cfg = Config.load(args.config)
     if args.manifest:
         cfg.data.manifest = args.manifest
+    cfg.train.skip_split_check = args.skip_split_check
     evaluate(cfg, args.ckpt, args.split)
     return 0
 

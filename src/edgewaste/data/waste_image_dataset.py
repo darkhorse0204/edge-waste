@@ -15,11 +15,11 @@ from torchvision import transforms
 
 from edgewaste.taxonomy import NUM_CLASSES
 
-# Public waste datasets routinely ship a few truncated JPEGs. Decoding what is
+# public waste datasets routinely ship a few truncated jpegs. decoding what is
 # present beats aborting an epoch over the missing tail bytes.
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-# ImageNet statistics (both timm ConvNeXt and ViT are pretrained on these).
+# imagenet statistics (both timm convnext and vit are pretrained on these).
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
@@ -49,7 +49,7 @@ def build_transforms(image_size: int, train: bool) -> transforms.Compose:
 class WasteDataset(Dataset):
     """Reads (path, label) rows for one split from the manifest CSV."""
 
-    # How many neighbouring samples to try before declaring the split broken.
+    # how many neighbouring samples to try before declaring the split broken.
     _MAX_SUBSTITUTIONS = 50
 
     def __init__(self, manifest: str | Path, split: str, image_size: int,
@@ -67,10 +67,10 @@ class WasteDataset(Dataset):
         return len(self.df)
 
     def __getitem__(self, i: int):
-        # A single unreadable file must never kill a multi-hour training run.
-        # Public dataset mirrors ship the occasional corrupt image, and losing
+        # a single unreadable file must never kill a multi-hour training run.
+        # public dataset mirrors ship the occasional corrupt image, and losing
         # four finished epochs to one of them is a far worse outcome than
-        # quietly training on a neighbouring sample instead. Each bad path is
+        # quietly training on a neighbouring sample instead. each bad path is
         # reported once so the corruption stays visible rather than silent.
         n = len(self.df)
         for offset in range(min(n, self._MAX_SUBSTITUTIONS)):

@@ -110,7 +110,7 @@ def gradcam_overlay(cam: GradCAM, classifier, tfm, crop: Image.Image, device,
 
 
 # ---------------------------------------------------------------------------
-# Caption text — what the heatmap does and does not account for
+# caption text — what the heatmap does and does not account for
 # ---------------------------------------------------------------------------
 _CAPTIONS = {
     FROM_MATERIAL: "Classifier decided this. Heatmap explains it.",
@@ -192,7 +192,7 @@ class LiveExplainer:
             panel = self._compose(crop_rgb, overlay, det, frame_idx)
             self._cache = _Cached(panel, frame_idx, det.track_id, det.class_name)
 
-        # Age is drawn on a copy so the cached panel stays reusable.
+        # age is drawn on a copy so the cached panel stays reusable.
         return self._with_age(self._cache.panel, frame_idx - self._cache.frame_idx)
 
     # -- rendering ----------------------------------------------------------
@@ -215,7 +215,7 @@ class LiveExplainer:
         t, pad = self.tile, 16
         w = t * 2 + pad * 3
         header = 54
-        # Caption height is derived from the wrapped text rather than assumed,
+        # caption height is derived from the wrapped text rather than assumed,
         # so a long "decided_by" explanation cannot overflow the panel.
         caption = _wrap(_CAPTIONS.get(det.decided_by, ""), w - 2 * pad, 0.46)
         attn_txt = ""
@@ -252,7 +252,7 @@ class LiveExplainer:
         for line in caption:
             cv2.putText(canvas, line, (pad, y), _FONT, 0.46, _FG, 1, cv2.LINE_AA)
             y += 18
-        # Attention split — states how much of the fused model this heatmap
+        # attention split — states how much of the fused model this heatmap
         # actually covers, instead of implying it explains the whole thing.
         for line in attn_lines:
             cv2.putText(canvas, line, (pad, y), _FONT, 0.44, _DIM, 1, cv2.LINE_AA)

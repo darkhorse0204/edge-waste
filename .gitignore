@@ -57,3 +57,17 @@ Thumbs.db
 
 # downloaded base model weights (yolo26n, mobile sam)
 /weights/
+
+# project report deliverables (named students, invention details): kept local; scripts/report rebuilds them
+/docs/report/*
+!/docs/report/mermaid/
+!/docs/report/assets/
+
+# personal documents, patent material and large review binaries: never pushed
+/4244106848.pdf
+/4765692620.pdf
+/Invention_Disclosure_Form_*.pdf
+/Project-1 Report final.docx
+/docs/references.md
+/review/supporting/
+/review/media/

@@ -96,8 +96,8 @@ def mcnemar(y: np.ndarray, pred_a: np.ndarray, pred_b: np.ndarray) -> dict:
     rate beyond chance? Exact binomial for small discordant counts,
     continuity-corrected chi-square otherwise."""
     a_ok, b_ok = pred_a == y, pred_b == y
-    b = int((a_ok & ~b_ok).sum())  # A right, B wrong
-    c = int((~a_ok & b_ok).sum())  # A wrong, B right
+    b = int((a_ok & ~b_ok).sum())  # a right, b wrong
+    c = int((~a_ok & b_ok).sum())  # a wrong, b right
     if b + c < 25:
         p = binomtest(b, b + c, 0.5).pvalue if b + c else 1.0
         return {"a_right_b_wrong": b, "a_wrong_b_right": c, "test": "exact binomial", "p_value": float(p)}

@@ -180,7 +180,7 @@ def ingest(cfg: Config) -> dict[str, int]:
             for cls, n in counts.items():
                 totals[cls] += n
 
-    # Report
+    # report
     print("\nConsolidated per-class counts (processed_dir):")
     grand = 0
     for cls in CLASS_NAMES:

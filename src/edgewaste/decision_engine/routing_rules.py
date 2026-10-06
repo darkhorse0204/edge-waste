@@ -14,10 +14,10 @@ from dataclasses import dataclass
 
 from edgewaste.taxonomy import FAMILIES, FAMILY_TO_INDEX, family_of, is_hazardous
 
-# A physical sorter has one gate per *material family*, not per item class:
-# a water bottle and a soda bottle go down the same chute. So gates are
+# a physical sorter has one gate per *material family*, not per item class:
+# a water bottle and a soda bottle go down the same chute. so gates are
 # indexed by family, plus two extra gates for items the vision model is
-# unsure about or that OCI flags as contaminated.
+# unsure about or that oci flags as contaminated.
 GATE_INDEX: dict[str, int] = dict(FAMILY_TO_INDEX)
 GATE_MANUAL_REVIEW = len(FAMILIES)
 GATE_CONTAMINATED_REJECT = len(FAMILIES) + 1

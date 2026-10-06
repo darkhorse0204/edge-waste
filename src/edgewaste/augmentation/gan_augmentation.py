@@ -108,7 +108,7 @@ class _ImageFolderFlat(Dataset):
         self.tfm = transforms.Compose([
             transforms.Resize((image_size, image_size)),
             transforms.ToTensor(),
-            transforms.Normalize([0.5] * 3, [0.5] * 3),  # match Tanh's [-1, 1] output range
+            transforms.Normalize([0.5] * 3, [0.5] * 3),  # match tanh's [-1, 1] output range
         ])
 
     def __len__(self) -> int:
@@ -155,7 +155,7 @@ def train_gan(
             real_labels = torch.full((bs,), 0.9, device=device_t)  # label smoothing
             fake_labels = torch.zeros(bs, device=device_t)
 
-            # --- Discriminator ---
+            # --- discriminator ---
             opt_d.zero_grad()
             d_real = disc(real)
             loss_d_real = criterion(d_real, real_labels)
@@ -167,7 +167,7 @@ def train_gan(
             loss_d.backward()
             opt_d.step()
 
-            # --- Generator ---
+            # --- generator ---
             opt_g.zero_grad()
             d_fake_for_g = disc(fake)
             loss_g = criterion(d_fake_for_g, torch.full((bs,), 0.9, device=device_t))

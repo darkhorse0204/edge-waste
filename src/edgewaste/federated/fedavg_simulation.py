@@ -11,7 +11,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
@@ -20,7 +19,7 @@ from edgewaste.config import Config
 from edgewaste.data.waste_image_dataset import WasteDataset
 from edgewaste.classification import build_model
 from edgewaste.taxonomy import CLASS_NAMES, NUM_CLASSES
-from edgewaste.common_utils import accuracy, pick_device, seed_everything
+from edgewaste.common_utils import pick_device, seed_everything
 
 
 def partition_indices(
@@ -81,7 +80,7 @@ def fedavg(state_dicts: list[dict], client_sizes: list[int]) -> dict:
     for sd, w in zip(state_dicts, weights):
         for k in avg:
             avg[k] += sd[k].float() * w
-    # Cast back to each param's original dtype (state_dict may hold ints/bools too).
+    # cast back to each param's original dtype (state_dict may hold ints/bools too).
     ref = state_dicts[0]
     return {k: v.to(ref[k].dtype) for k, v in avg.items()}
 

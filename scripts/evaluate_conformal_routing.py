@@ -148,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
             conf_runs.append(score(kind, fam_r, fam_true[ev]))
             cover.append([sets_ev[fam_true[ev] == f, f].mean() for f in range(len(FAMILIES))])
 
-            # Baseline at matched workload: tau chosen on the calibration half.
+            # baseline at matched workload: tau chosen on the calibration half.
             cal_kind, _ = route_sets(prediction_sets(fm[cal], q))
             target_review = float(np.isin(cal_kind, [ROUTE_AUTO, ROUTE_HAZARD], invert=True).mean())
             tau = tau_for_review_rate(conf[cal], target_review)
@@ -166,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
                  "hazard_empirical_coverage_below_target_rate": float((cov[:, HAZ] < 1 - alpha_h).mean())}
         results["configs"].append(entry)
 
-    # Deployable thresholds, calibrated on the full test split at the default operating point.
+    # deployable thresholds, calibrated on the full test split at the default operating point.
     router = ConformalRouter.fit(probs, labels, class_names, alpha=0.05, alpha_hazard=0.02, delta=0.05)
     router.save(out_dir / "conformal_router.json")
 

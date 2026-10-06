@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
         by_class[cls].append((name, path))
     rows = []
     for cls in CLASS_NAMES:
-        items = sorted(by_class.get(cls, []))  # sorted(d.iterdir()) order on Colab
+        items = sorted(by_class.get(cls, []))  # sorted(d.iterdir()) order on colab
         names = [n for n, _ in items]
         path_of = dict(items)
         trv, te = train_test_split(names, test_size=cfg.data.test_fraction,

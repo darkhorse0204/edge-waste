@@ -22,16 +22,16 @@ import numpy as np
 from edgewaste.contamination.sensor_normalization import CalibrationAnchors
 from edgewaste.taxonomy import CLASS_TO_FAMILY
 
-# Same anchors as contamination/synthetic_calibration_data.py so simulated readings and the OCI model
+# same anchors as contamination/synthetic_calibration_data.py so simulated readings and the oci model
 # fitted on synthetic calibration data speak the same units.
 SIM_ANCHORS = CalibrationAnchors(m_dry=200.0, m_wet=800.0, r0=10_000.0, l_min=0.0, l_max=2.5)
 
-# Per-class base contamination propensity (0-1): how "wet/off-gassing" a
+# per-class base contamination propensity (0-1): how "wet/off-gassing" a
 # freshly-classified item of this material typically reads, before noise.
-# Organic is deliberately wet/high-gas by construction; everything else is
+# organic is deliberately wet/high-gas by construction; everything else is
 # low but non-zero, so an occasional "greasy pizza box" (contaminated
-# cardboard) is possible and gives OCI something to catch.
-# Keyed by material *family*: wetness is a property of what the item is made
+# cardboard) is possible and gives oci something to catch.
+# keyed by material *family*: wetness is a property of what the item is made
 # of and what it held, not of which specific bottle variant it is.
 _BASE_WETNESS = {
     "organic": 0.85, "cardboard": 0.15, "paper": 0.15, "plastic": 0.10,
@@ -44,7 +44,7 @@ _METAL_TRUE_RATE = {"metal": 0.95, "hazardous": 0.60}
 @dataclass
 class SensorReading:
     moisture_raw: float
-    rs: float  # MQ-135 sensor resistance
+    rs: float  # mq-135 sensor resistance
     metal_detected: bool
     load_g: float
 

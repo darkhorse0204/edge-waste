@@ -1,0 +1,16 @@
+%% federated.mmd - mermaid source of a figure in the project report
+flowchart TB
+    G0["Shared model (round r)"]
+    U1["Sorting unit 1<br/>local images stay here<br/>local training"]
+    U2["Sorting unit 2<br/>local images stay here<br/>local training"]
+    UK["Sorting unit K<br/>local images stay here<br/>local training"]
+    AGG["Aggregation server<br/>weighted average of parameters<br/>theta = sum (n_k / N) theta_k"]
+    G1["Shared model (round r + 1)"]
+    G0 -->|send parameters| U1
+    G0 -->|send parameters| U2
+    G0 -->|send parameters| UK
+    U1 -->|updated parameters only| AGG
+    U2 -->|updated parameters only| AGG
+    UK -->|updated parameters only| AGG
+    AGG --> G1
+    style AGG fill:#dae8fc,stroke:#6c8ebf

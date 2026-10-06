@@ -61,7 +61,7 @@ def shap_explain_oci(
         use_interaction,
     )
 
-    # A linear model in the *logit*: SHAP explains that linear function
+    # a linear model in the *logit*: shap explains that linear function
     # (base_value + beta0 offset), the sigmoid is then applied to interpret
     # magnitudes but does not change which feature gets credit for what.
     explainer = shap.LinearExplainer(

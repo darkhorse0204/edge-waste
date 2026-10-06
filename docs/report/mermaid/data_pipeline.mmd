@@ -1,0 +1,24 @@
+%% data_pipeline.mmd - mermaid source of a figure in the project report
+flowchart LR
+    K1["Recyclable and Household Waste Classification<br/>(Kaggle, 30 item classes)"]
+    K2["Garbage Classification 12<br/>(Kaggle: battery, clothing, shoes, food waste)"]
+    K3["TrashBox<br/>(Kaggle: electronic waste, medical waste)"]
+    DL["Download<br/>(edgewaste-fetch)"]
+    IN["Ingest and map to the<br/>33-class taxonomy<br/>(drop unmappable folders,<br/>reject unreadable images)"]
+    HS["Name each image by a hash<br/>of its relative source path"]
+    SP["Stratified split 70 / 15 / 15<br/>seed 42"]
+    TR[("Train<br/>19,739")]
+    VA[("Validation<br/>4,232")]
+    TE[("Test<br/>4,232")]
+    AU["Training-only augmentation<br/>crop, flip, rotation,<br/>colour jitter, blur, erasing"]
+    MD["Model training"]
+    K1 --> DL
+    K2 --> DL
+    K3 --> DL
+    DL --> IN --> HS --> SP
+    SP --> TR --> AU --> MD
+    SP --> VA --> MD
+    SP --> TE
+    style TE fill:#fde9d9,stroke:#c0504d
+    style TR fill:#d5e8d4,stroke:#82b366
+    style VA fill:#dae8fc,stroke:#6c8ebf

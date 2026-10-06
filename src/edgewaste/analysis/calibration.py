@@ -60,13 +60,13 @@ def reliability_plot(before: dict, after: dict, T: float, path) -> None:
     import matplotlib.pyplot as plt
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.6), sharey=True)
-    for ax, s, title in ((axes[0], before, "Before (T = 1)"), (axes[1], after, f"After temperature scaling (T = {T:.2f})")):
+    for ax, s, title in ((axes[0], before, "Before (temperature = 1)"), (axes[1], after, f"After temperature scaling (temperature = {T:.2f})")):
         centers = [(b["lo"] + b["hi"]) / 2 for b in s["bins"]]
         ax.bar(centers, [b["accuracy"] for b in s["bins"]], width=1 / 15, edgecolor="black",
                color="#4c78a8", alpha=0.85, label="accuracy in bin")
         ax.plot([0, 1], [0, 1], "--", color="gray", label="perfect calibration")
         ax.plot(centers, [b["confidence"] for b in s["bins"]], "o", color="#e45756", ms=4, label="mean confidence")
-        ax.set_title(f"{title}\nECE {s['ece'] * 100:.2f}%  NLL {s['nll']:.3f}")
+        ax.set_title(f"{title}\nExpected calibration error {s['ece'] * 100:.2f}%, negative log-likelihood {s['nll']:.3f}", fontsize=8)
         ax.set_xlabel("confidence"); ax.set_xlim(0, 1); ax.set_ylim(0, 1)
     axes[0].set_ylabel("accuracy"); axes[0].legend(loc="upper left", fontsize=8)
     fig.tight_layout(); fig.savefig(path, dpi=130); plt.close(fig)

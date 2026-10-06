@@ -1,0 +1,158 @@
+{
+ "path": "data/processed/e_waste/trashbox__e-waste__84b99bc007.jpg",
+ "true": "e_waste",
+ "top1": "glass_cosmetic_containers",
+ "top3": [
+  [
+   "glass_cosmetic_containers",
+   0.4072954058647156
+  ],
+  [
+   "e_waste",
+   0.24725621938705444
+  ],
+  [
+   "medical",
+   0.024461448192596436
+  ]
+ ],
+ "family_mass": {
+  "plastic": 0.09813874214887619,
+  "paper": 0.049929775297641754,
+  "cardboard": 0.021039345301687717,
+  "glass": 0.44451298378407955,
+  "metal": 0.04289148934185505,
+  "organic": 0.03063581231981516,
+  "styrofoam": 0.02303981501609087,
+  "textile": 0.005894172820262611,
+  "hazardous": 0.2839178489521146
+ },
+ "thresholds_q": {
+  "plastic": 0.269822770729661,
+  "paper": 0.5283939186483622,
+  "cardboard": 0.4129600264132023,
+  "glass": 0.14373865257948637,
+  "metal": 0.09741477109491825,
+  "organic": 0.20893648779019713,
+  "styrofoam": 0.9633322712033987,
+  "textile": 0.5405958509072661,
+  "hazardous": 0.7839739797636867
+ },
+ "set": [
+  "hazardous"
+ ],
+ "U": 0.6390699148178101,
+ "tau_u": 0.730606734752655,
+ "attn_convnext_vit": [
+  0.90283203125,
+  0.09722900390625
+ ],
+ "demo_rows": [
+  {
+   "path": "data/processed/shoes/garbage12__shoes__582b639dfd.jpg",
+   "true": "shoes",
+   "top1": "shoes",
+   "set": [
+    "textile"
+   ],
+   "U": 0.5196730494499207,
+   "action": "AUTO: textile bin"
+  },
+  {
+   "path": "data/processed/shoes/garbage12__shoes__f949811be0.jpg",
+   "true": "shoes",
+   "top1": "shoes",
+   "set": [
+    "textile"
+   ],
+   "U": 0.5006093978881836,
+   "action": "AUTO: textile bin"
+  },
+  {
+   "path": "data/processed/food_waste/garbage12__biological__5f548b3bfc.jpg",
+   "true": "food_waste",
+   "top1": "food_waste",
+   "set": [
+    "organic"
+   ],
+   "U": 0.35785531997680664,
+   "action": "AUTO: organic bin"
+  },
+  {
+   "path": "data/processed/e_waste/trashbox__e-waste__02511dd347.jpg",
+   "true": "e_waste",
+   "top1": "e_waste",
+   "set": [
+    "hazardous"
+   ],
+   "U": 0.4837924838066101,
+   "action": "HAZARDOUS BIN"
+  },
+  {
+   "path": "data/processed/e_waste/trashbox__e-waste__84b99bc007.jpg",
+   "true": "e_waste",
+   "top1": "glass_cosmetic_containers",
+   "set": [
+    "hazardous"
+   ],
+   "U": 0.6390699148178101,
+   "action": "HAZARDOUS BIN"
+  },
+  {
+   "path": "data/processed/medical/trashbox__medical__9190973bdd.jpg",
+   "true": "medical",
+   "top1": "aluminum_food_cans",
+   "set": [
+    "hazardous"
+   ],
+   "U": 0.6479992270469666,
+   "action": "HAZARDOUS BIN"
+  },
+  {
+   "path": "data/processed/clothing/garbage12__clothes__fd762e8995.jpg",
+   "true": "clothing",
+   "top1": "clothing",
+   "set": [
+    "styrofoam",
+    "textile"
+   ],
+   "U": 0.7453110218048096,
+   "action": "MANUAL REVIEW"
+  },
+  {
+   "path": "data/processed/shoes/garbage12__shoes__00237381fc.jpg",
+   "true": "shoes",
+   "top1": "clothing",
+   "set": [],
+   "U": 0.8398593068122864,
+   "action": "MANUAL REVIEW"
+  }
+ ],
+ "n_calibration": 2116,
+ "n_demo_pool": 2116,
+ "hazard_q": 0.7839739797636867,
+ "eq19": {
+  "beta": 0.1,
+  "tau_u": 0.730606734752655
+ },
+ "family_accuracy_top1": 0.941398865784499,
+ "attn_mean": [
+  0.8815651444721763,
+  0.11843724602336919
+ ],
+ "mean_set_size": 1.0396975425330812,
+ "share_hazard_in_set_for_true_hazards": 0.9543010752688172,
+ "n_true_hazards_in_demo_pool": 372,
+ "eq34": {
+  "true": "aluminum_soda_cans",
+  "top1_before": "plastic_water_bottles",
+  "p_top1_before": 0.6891502737998962,
+  "p_soda_before": 0.043008722364902496,
+  "c": 0.8,
+  "p_soda_masked": 0.4833357098773159,
+  "p_soda_fused": 0.39527031237483323,
+  "top1_after": "aluminum_soda_cans",
+  "p_top1_after": 0.39527031237483323,
+  "mass_on_fit_before": 0.08898312598466873
+ }
+}

@@ -1,0 +1,17 @@
+track_id,object_class,object_conf,material,material_raw,prior_corrected,consistent,material_conf,uncertainty,oci_score,route,hazard_suspected,sam_fill_ratio,first_frame,last_frame,frames_visible
+1,Cup,0.859,cardboard_packaging,cardboard_packaging,0,0,0.525,0.457,0.417,manual_review,0,,22,39,17
+12,Plastic bag - wrapper,0.889,e_waste,e_waste,0,1,0.781,0.568,0.394,manual_review,1,,62,80,19
+13,Cup,0.954,cardboard_packaging,cardboard_packaging,0,0,0.617,0.378,0.465,manual_review,0,,82,100,19
+14,Can,0.940,medical,medical,0,1,0.400,0.781,0.386,manual_review,1,,82,100,19
+15,Cup,0.901,cardboard_packaging,cardboard_packaging,0,0,0.389,0.581,0.443,manual_review,0,,82,100,19
+16,Can,0.880,cardboard_packaging,cardboard_packaging,0,0,0.446,0.529,0.464,manual_review,0,,82,90,9
+20,Bottle cap,0.864,medical,medical,0,1,0.721,0.608,0.370,manual_review,1,,102,129,20
+40,Cup,0.600,medical,medical,0,1,0.397,0.840,0.372,manual_review,1,,123,123,1
+42,Cup,0.685,medical,medical,0,1,0.357,0.795,0.400,manual_review,1,,130,139,8
+44,Other litter,0.578,medical,medical,0,1,0.283,0.809,0.436,manual_review,1,,134,137,2
+45,Plastic bag - wrapper,0.838,medical,clothing,1,1,0.304,0.826,0.394,manual_review,1,,142,142,1
+46,Plastic bag - wrapper,0.676,medical,medical,0,1,0.360,0.852,0.429,manual_review,1,,142,160,19
+47,Carton,0.637,medical,clothing,1,1,0.307,0.838,0.391,manual_review,1,,145,145,1
+48,Plastic bag - wrapper,0.326,medical,clothing,1,1,0.291,0.818,0.374,manual_review,1,,148,151,4
+49,Carton,0.488,medical,clothing,1,1,0.286,0.822,0.335,manual_review,1,,154,154,1
+53,Cup,0.588,e_waste,cardboard_packaging,1,1,0.275,0.881,0.387,manual_review,1,,166,166,1

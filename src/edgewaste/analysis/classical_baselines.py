@@ -109,11 +109,11 @@ def embedding_projections(test: dict, class_names: list[str], path, seed: int = 
     emb = StandardScaler().fit_transform(test["emb"].astype(np.float32))
     img = StandardScaler().fit_transform(test["imagenet"].astype(np.float32))
     views = {
-        "PCA (fine-tuned embedding)": PCA(2, random_state=seed).fit_transform(emb),
-        "LDA (fine-tuned embedding)": LinearDiscriminantAnalysis(n_components=2).fit_transform(emb, y),
-        "t-SNE (frozen ImageNet features)": TSNE(2, random_state=seed, init="pca").fit_transform(
+        "Principal component analysis (fine-tuned embedding)": PCA(2, random_state=seed).fit_transform(emb),
+        "Linear discriminant analysis (fine-tuned embedding)": LinearDiscriminantAnalysis(n_components=2).fit_transform(emb, y),
+        "t-distributed stochastic neighbour embedding (frozen ImageNet features)": TSNE(2, random_state=seed, init="pca").fit_transform(
             PCA(50, random_state=seed).fit_transform(img)),
-        "t-SNE (fine-tuned embedding)": TSNE(2, random_state=seed, init="pca").fit_transform(
+        "t-distributed stochastic neighbour embedding (fine-tuned embedding)": TSNE(2, random_state=seed, init="pca").fit_transform(
             PCA(50, random_state=seed).fit_transform(emb)),
     }
     cmap = plt.get_cmap("tab10")
@@ -122,7 +122,7 @@ def embedding_projections(test: dict, class_names: list[str], path, seed: int = 
         for f, fam in enumerate(FAMILIES):
             m = fam_idx == f
             ax.scatter(Z[m, 0], Z[m, 1], s=4, alpha=0.6, color=cmap(f), label=fam)
-        ax.set_title(title); ax.set_xticks([]); ax.set_yticks([])
+        ax.set_title(title, fontsize=9); ax.set_xticks([]); ax.set_yticks([])
     axes[0, 0].legend(markerscale=4, fontsize=8, loc="best")
     fig.suptitle("Test set (4,232 images) coloured by material family", fontsize=13)
     fig.tight_layout(); fig.savefig(path, dpi=120); plt.close(fig)

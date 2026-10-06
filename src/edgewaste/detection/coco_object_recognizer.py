@@ -36,7 +36,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-# Decision provenance, carried through to the display and the CSV so every
+# decision provenance, carried through to the display and the csv so every
 # prediction can be traced back to what actually decided it.
 FROM_IDENTITY = "identity"     # object label alone
 FROM_CONSTRAINED = "constrained"  # classifier, restricted by object label
@@ -61,25 +61,25 @@ class Rule:
 
 
 # ---------------------------------------------------------------------------
-# COCO class -> waste taxonomy.
+# coco class -> waste taxonomy.
 #
-# Anything absent from this table is treated as "recognised but not waste"
+# anything absent from this table is treated as "recognised but not waste"
 # (person, chair, dog, car, ...) and is dropped rather than force-fitted into
-# a class. `Rule.classes` entries must be real edgewaste.taxonomy.CLASS_NAMES
+# a class. `rule.classes` entries must be real edgewaste.taxonomy.class_names
 # — this table is built against the 33-item taxonomy, not the flat 7-class
 # one it originally targeted (see the note below on what changed).
 #
-# The 33-class taxonomy is a fine-grained *packaging-waste* taxonomy (nine
+# the 33-class taxonomy is a fine-grained *packaging-waste* taxonomy (nine
 # item classes are literally can/bottle/jar variants), not a general
-# household-object one, so most COCO objects have no single matching item —
+# household-object one, so most coco objects have no single matching item —
 # a fork is recognisably metal, but none of the four metal classes is
-# "cutlery". Forcing a fictional exact match would be more misleading than
+# "cutlery". forcing a fictional exact match would be more misleading than
 # admitting the ambiguity, so entries here mostly constrain to a *family*
-# (every item in FAMILY_TO_CLASSES[family]) rather than claim certainty they
-# do not have. `Rule.classes` is genuinely certain only where a family has
+# (every item in family_to_classes[family]) rather than claim certainty they
+# do not have. `rule.classes` is genuinely certain only where a family has
 # exactly one item that is the obvious match (a banana is food_waste, not
 # eggshells/coffee_grounds/tea_bags; a cell phone is the taxonomy's only
-# e-waste item). Two former "other" entries (suitcase, umbrella — no single
+# e-waste item). two former "other" entries (suitcase, umbrella — no single
 # dominant material) are dropped rather than force-fitted, since the
 # taxonomy no longer has a catch-all class to put them in at all.
 # ---------------------------------------------------------------------------
@@ -213,13 +213,13 @@ def apply_identity_prior(
         return probs, FROM_MATERIAL
 
     if rule.is_certain:
-        # Concentrate mass on the implied class, scaled by how sure the
-        # recogniser was. Deliberately NOT a hard one-hot: a 0.42-confidence
+        # concentrate mass on the implied class, scaled by how sure the
+        # recogniser was. deliberately not a hard one-hot: a 0.42-confidence
         # "banana" should not present as a 100%-certain organic, and leaving
         # residual mass lets smoothing recover if the identity was wrong.
         idx = name_to_index[rule.classes[0]]
         adjusted = np.full_like(probs, 0.0)
-        # Two independent sources agreeing must never *lower* confidence. If
+        # two independent sources agreeing must never *lower* confidence. if
         # the classifier already backs the implied class more strongly than
         # the identity does, keep its figure; the prior only ever lifts a
         # class the classifier under-rated.
@@ -230,7 +230,7 @@ def apply_identity_prior(
             adjusted[others] = (1.0 - peak) / len(others)
         return adjusted, FROM_IDENTITY
 
-    # Constrained: keep only the plausible classes and renormalise. The
+    # constrained: keep only the plausible classes and renormalise. the
     # classifier's relative preference among survivors is preserved exactly —
     # this removes options, it does not re-rank them.
     mask = np.zeros_like(probs)
@@ -239,18 +239,18 @@ def apply_identity_prior(
     masked = probs * mask
     total = masked.sum()
     if total <= 0:
-        # Classifier put essentially zero mass on every plausible class — it
-        # disagrees with the identity entirely. Fall back to a flat prior over
+        # classifier put essentially zero mass on every plausible class — it
+        # disagrees with the identity entirely. fall back to a flat prior over
         # the allowed set rather than dividing by ~0.
         masked = mask / mask.sum()
     else:
         masked = masked / total
 
-    # Renormalising always *inflates* the survivor's confidence, because the
+    # renormalising always *inflates* the survivor's confidence, because the
     # competitors it removed had to go somewhere — an 0.86 becomes 0.99 purely
-    # by deletion. That is only justified to the extent the identity is
+    # by deletion. that is only justified to the extent the identity is
     # trustworthy, so blend back toward the unconstrained distribution in
-    # proportion to how sure the recogniser was. A 0.9-confidence "bottle"
+    # proportion to how sure the recogniser was. a 0.9-confidence "bottle"
     # constrains almost fully; a 0.55-confidence guess barely moves the answer,
     # which is what stops a shaky identity from producing a confident mistake.
     w = float(np.clip(identity_conf, 0.0, 1.0))

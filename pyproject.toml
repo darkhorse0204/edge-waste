@@ -34,6 +34,8 @@ detect = ["ultralytics>=8.4"]
 # only sklearn/numpy/torch, already core deps.
 explain = ["grad-cam>=1.5"]
 export = ["onnx>=1.15", "onnxruntime>=1.17"]
+# 2-day hardware prototype: serial link to the Arduino sensor and actuator node.
+hardware = ["pyserial>=3.5"]
 dev = ["pytest>=8.0", "ruff>=0.5"]
 
 [project.scripts]

@@ -42,7 +42,7 @@ def handcrafted_features(x: torch.Tensor) -> np.ndarray:
     """HSV colour histogram (3 x 32 bins, L1-normalised) + HOG on a 64x64
     greyscale copy (8x8 cells, 16x16 blocks, 9 orientations = 1764 values)."""
     global _HOG
-    if _HOG is None:  # created lazily: one per DataLoader worker process
+    if _HOG is None:  # created lazily: one per dataloader worker process
         _HOG = cv2.HOGDescriptor((64, 64), (16, 16), (8, 8), (8, 8), 9)
     img = ((x.permute(1, 2, 0).numpy() * _STD + _MEAN).clip(0, 1) * 255).astype(np.uint8)
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)

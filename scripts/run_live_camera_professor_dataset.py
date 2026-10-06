@@ -12,10 +12,10 @@ from pathlib import Path
 
 project = Path(__file__).resolve().parent.parent
 
-# YOLO detector
+# yolo detector
 detector = project / "runs" / "detect" / "taco_single_class" / "weights" / "best.pt"
 
-# NEW classifier
+# new classifier
 classifier = project / "runs" / "stage1_prof_dataset" / "best.pt"
 
 config = project / "configs" / "classifier_professor_dataset.yaml"
