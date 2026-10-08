@@ -1,0 +1,61 @@
+{
+ "segmentation_scores": {
+  "box_mAP50": 0.3249678804533154,
+  "box_mAP50_95": 0.23216048558660668,
+  "mask_mAP50": 0.32992915660700217,
+  "mask_mAP50_95": 0.22608998562961408,
+  "per_class_mask_mAP50": {
+   "rigid_plastic": 0.33893574048322966,
+   "cardboard": 0.4558771198539415,
+   "metal": 0.0027684766214177976,
+   "soft_plastic": 0.5221352894694199
+  }
+ },
+ "pipeline": {
+  "frames": 255,
+  "detections": 470,
+  "matched_to_ground_truth": 352,
+  "ground_truth_items_found_share": 0.32254901960784316,
+  "family_accuracy_segmenter_only": 0.9176136363636364,
+  "family_accuracy_33class_classifier_only": 0.019886363636363636,
+  "family_accuracy_fused_decision": 0.7613636363636364,
+  "detections_with_hazardous_in_set": 313,
+  "detections_sent_to_hazardous_bin": 59,
+  "per_video": {
+   "05": {
+    "frames": 100,
+    "gt_items": 549,
+    "gt_items_found": 171,
+    "tracks": 90,
+    "mean_track_length": 2.7333333333333334
+   },
+   "08": {
+    "frames": 54,
+    "gt_items": 314,
+    "gt_items_found": 94,
+    "tracks": 70,
+    "mean_track_length": 1.9285714285714286
+   },
+   "09": {
+    "frames": 101,
+    "gt_items": 157,
+    "gt_items_found": 64,
+    "tracks": 51,
+    "mean_track_length": 1.7450980392156863
+   }
+  },
+  "fused_confusion": {
+   "plastic -> plastic": 162,
+   "cardboard -> cardboard": 106,
+   "plastic -> hazardous": 24,
+   "cardboard -> hazardous": 15,
+   "plastic -> organic": 10,
+   "plastic -> cardboard": 10,
+   "plastic -> textile": 7,
+   "cardboard -> textile": 7,
+   "cardboard -> organic": 6,
+   "cardboard -> plastic": 4,
+   "plastic -> paper": 1
+  }
+ }
+}

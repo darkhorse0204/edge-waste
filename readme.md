@@ -783,6 +783,28 @@ conformal family sets; see [Uncertainty](#uncertainty-and-risk-bounded-hazard-ro
 report adds balanced accuracy, macro F1, kappa, MCC, AUCs, calibration error,
 and the two operational metrics: family (routing) accuracy and hazard recall.
 
+## Video and live-camera sorting (segmentation + segregation)
+
+`edgewaste-video-sorter` (`src/edgewaste/applications/video_sorter.py`) takes a video file, a folder of frames or a live camera (`--source 0`). For every item it draws the segmentation outline, tracks it across frames (ByteTrack), classifies the mask-cropped item with the 33-class model, and chooses the bin. Outputs: `annotated.mp4`, `detections.csv`, `inventory.csv`, `summary.txt`.
+
+- **Dataset:** ZeroWaste-f (Bashkirova et al., 2022, arXiv 2106.02740, Zenodo record 6412647): real conveyor-belt video frames with polygon masks for rigid plastic, cardboard, metal and soft plastic. `scripts/prepare_zerowaste_video.py` streams it (the zip is 7.5 GB, never stored) into `data/video/zerowaste/` (git-ignored). Used here: 1,001 train (every 3rd frame, shuffled), 305 val (every 2nd), 255 test frames (videos 05, 08, 09 only; the full test split was not downloaded because the connection was slow).
+- **Model:** YOLO26n-seg fine-tuned by `scripts/train_video_segmenter.py` (38 epochs, early stopped, batch 8, 640 px, RTX 2050) -> `runs/video_seg/zerowaste_seg_a/weights/best.pt`.
+- **Decision:** the video-trained segmenter decides the material when its voted confidence is at least 0.40; the 33-class model gives the fine class. Safety rule kept: if the calibrated conformal set contains hazardous AND the classifier's hazardous probability is at least `--haz-mass` (0.90), recycling bins are barred. `startup_calibration.py` sets the uncertainty threshold and conformal thresholds from the validation cache at start-up.
+- **Evaluation** (`scripts/evaluate_video_sorter.py` -> `reports/video/evaluation.md`, 255 test frames, 470 detections; mask-IoU >= 0.5 matching):
+
+| quantity | value |
+|---|---|
+| box mAP50 / mAP50-95 | 0.325 / 0.232 |
+| mask mAP50 / mAP50-95 | 0.330 / 0.226 |
+| per-class mask mAP50 | rigid plastic 0.34, cardboard 0.46, metal 0.003, soft plastic 0.52 |
+| ground-truth items found | 32.3% |
+| family accuracy of matched items: segmenter only / 33-class model only / fused | 91.8% / 2.0% / 76.1% |
+| false hazardous-bin routes (dataset has no hazardous items) | 59 of 470 |
+| speed | about 13.5 frames per second (segment + track + classify) |
+
+- **Honest reading:** segmentation is modest (a nano model, 1,001 frames, many small overlapping items; metal has very few examples and is essentially not learned). The photo-trained 33-class model is badly out of domain on conveyor crops (2.0% family accuracy and it frequently puts hazardous in the set), which is why the video-trained segmenter decides the material. With the hazard gate at 0.50 the fused accuracy was 45.5% (204 false hazard routes); at 0.90 it is 76.1% (59). Fused stays below segmenter-only because those 59 safety overrides are kept. Tracks are short (about 2 frames) because frames are 10 apart. Test video 09 has training frames as close as 60 frames, so its numbers are optimistic. Not tested on a live camera yet.
+- **Not done:** hazardous items are not in ZeroWaste, so hazard recognition on video comes only from the photo-trained classifier and is unvalidated on video.
+
 ## Hardware prototype (two-day, minimum cost)
 
 A bench unit with a camera, a moisture sensor, an MQ-135 gas sensor, one servo that tilts a tray, three leds and a buzzer, driven by an Arduino over USB serial; the laptop runs the models. Full plan (parts about ₹1,000-1,800, wiring, build, calibration, schedule, tests): [docs/hardware_prototype_plan.md](docs/hardware_prototype_plan.md). With an ESP32, a DHT22 (humidity replaces the moisture probe), an MQ-135 and a servo, follow [docs/esp32_prototype_walkthrough.md](docs/esp32_prototype_walkthrough.md) and use `scripts/check_node.py` for bring-up.
@@ -814,6 +836,7 @@ Outputs: `docs/report/BITE497J_Project_I_Report.docx` (115 pages: front matter i
 
 | Date | Change |
 |---|---|
+| 2026-10-09 | Video and live-camera sorting: ZeroWaste-f conveyor-video dataset (streamed, git-ignored), YOLO26n-seg trained on it, `edgewaste-video-sorter` (segment + track + classify + route), `startup_calibration.py`, `scripts/evaluate_video_sorter.py`. Test (255 frames, 3 videos): mask mAP50 0.33; family accuracy 91.8% segmenter-only, 2.0% photo-trained classifier-only, 76.1% fused; 59/470 false hazard routes after adding a 0.90 hazard-probability gate (0.50 gave 204). Live camera untested. |
 | 2026-10-05 | ESP32 variant of the prototype: `hardware/esp32/sorter_node_esp32/sorter_node_esp32.ino` (DHT22 humidity x10 as the moisture channel, MQ-135 through a voltage divider, servo, BOOT-button trigger), `docs/esp32_prototype_walkthrough.md`, `scripts/check_node.py` bring-up tool, and a more robust serial link that skips ESP32 boot text. Serial class tested against a fake ESP32; firmware not compiled or run on hardware. |
 | 2026-10-03 | Two-day hardware prototype plan and software: `docs/hardware_prototype_plan.md` (bill of materials about ₹1,000-1,800, wiring, mechanics, hour-by-hour schedule, tests), Arduino firmware `hardware/arduino/sorter_node/sorter_node.ino`, `scripts/prototype_sorter.py` (camera + sensors + decision engine + tray commands, with `--mock-node`), `scripts/calibrate_prototype_oci.py` (collect and fit real contamination calibration), `edgewaste.applications.prototype_node` (serial link and mock). Tested in mock mode on real images and on invented sensor data; not yet run on physical hardware. |
 | 2026-10-02 | References from the Review 1 submission were re-checked against Crossref; corrections: Alkılınç et al. year and author list, Arun issue number, Radchenko and Fill identified (arXiv 2403.09141). Hardware cost figures are planning estimates. |

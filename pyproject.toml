@@ -51,6 +51,7 @@ edgewaste-pipeline = "edgewaste.applications.live_camera_pipeline:main"
 edgewaste-federated = "edgewaste.federated.fedavg_simulation:main"
 edgewaste-export = "edgewaste.classification.export_onnx:main"
 edgewaste-video = "edgewaste.applications.video_litter_survey:main"
+edgewaste-video-sorter = "edgewaste.applications.video_sorter:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
